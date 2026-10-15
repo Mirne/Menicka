@@ -1,0 +1,12 @@
+# Reštaurácie, z ktorých sa sťahujú menučka.
+# Pri štarte sa nahrajú do databázy (podľa URL). Ďalšie sa dajú pridať aj priamo na stránke.
+#
+#   name:     zobrazený názov
+#   url:      stránka s menu
+#   kind:     auto | choiceqr | html   (auto = choiceqr.com sa spozná podľa adresy)
+#   selector: voliteľný CSS selektor časti stránky, kde je menu (napr. "#denni-menu")
+restaurants:
+  - name: Padagali
+    url: https://padagali.choiceqr.com/section:menu
+  - name: Everest
+    url: https://www.everestbrno.cz/

@@ -1,0 +1,16 @@
+services:
+  menicka:
+    build: .
+    ports:
+      - "${PORT:-8000}:8000"
+    environment:
+      TZ: Europe/Prague
+      REFRESH_MINUTES: "30"
+    volumes:
+      - menicka-data:/data
+      # edit restaurants.yaml and restart, no rebuild needed
+      - ./restaurants.yaml:/app/restaurants.yaml:ro
+    restart: unless-stopped
+
+volumes:
+  menicka-data:

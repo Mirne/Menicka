@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="sk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Menučka</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="top">
+    <h1>Menučka <span id="today" class="muted"></span></h1>
+    <button id="refresh" class="ghost" title="Znova stiahnuť menu zo všetkých reštaurácií">↻ Obnoviť menu</button>
+  </header>
+
+  <main>
+    <section class="panel" id="vote-panel">
+      <h2>Kam ideš na obed?</h2>
+      <form id="vote-form" class="row">
+        <label>Meno<input id="vote-name" required maxlength="40" placeholder="Tvoje meno" autocomplete="name"></label>
+        <label>Reštika<select id="vote-restaurant" required></select></label>
+        <label class="grow">Poznámka<input id="vote-note" maxlength="120" placeholder="napr. o 11:45, vegetarián"></label>
+        <button type="submit">Uložiť</button>
+        <button type="button" id="vote-clear" class="ghost">Zrušiť môj hlas</button>
+      </form>
+      <div id="tally" class="tally"></div>
+    </section>
+
+    <div class="toolbar">
+      <label class="check"><input type="checkbox" id="show-all"> Zobraziť celé menu (nielen denné)</label>
+    </div>
+    <section id="menus" class="menus"><p class="muted">Načítavam menu…</p></section>
+
+    <details class="panel" id="admin">
+      <summary>Reštaurácie</summary>
+      <ul id="restaurant-list" class="rlist"></ul>
+      <form id="add-form" class="row">
+        <label>Názov<input id="add-name" required maxlength="80"></label>
+        <label class="grow">URL stránky s menu<input id="add-url" required type="url" placeholder="https://…"></label>
+        <label>Typ<select id="add-kind">
+          <option value="auto">auto</option><option value="choiceqr">ChoiceQR</option><option value="html">webstránka</option>
+        </select></label>
+        <label>CSS selektor <span class="muted">(voliteľné)</span><input id="add-selector" maxlength="200" placeholder="#denni-menu"></label>
+        <button type="submit">Pridať</button>
+      </form>
+    </details>
+  </main>
+  <div id="toast" role="status"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>
