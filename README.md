@@ -4,7 +4,7 @@ Stránka, ktorá zbiera denné menu z reštaurácií, ktoré zadáte, a ukazuje,
 
 - **Menu**: pre každú reštauráciu sa stiahne dnešné menu (pri štarte, potom každých 30 minút, alebo tlačidlom *Obnoviť menu*).
 - **Ľudia**: zadáš meno a vyberieš reštiku (aj s poznámkou, napr. „o 11:45“). Jeden hlas na osobu a deň, ďalší ho prepíše. Hlasy sa na druhý deň začínajú odznova.
-- **Reštaurácie**: v súbore `restaurants.yaml`, alebo cez sekciu *Reštaurácie* dole na stránke.
+- **Reštaurácie**: iba v súbore `restaurants.yaml`. Reštaurácia, ktorú zo súboru zmažeš, po reštarte zmizne aj zo stránky.
 
 ## Spustenie
 
@@ -19,7 +19,7 @@ Konkrétny port: `PORT=51234 ./start.sh`.
 Bez skriptu, napríklad na Windows bez bashu: `docker compose up --build`, s portom `PORT=51234 docker compose up --build`.
 
 Logy: `docker compose logs -f`. Zastavenie: `docker compose down`.
-Dáta, teda reštaurácie pridané na stránke a hlasy, sú v Docker volume `menicka-data`.
+Hlasy sú v Docker volume `menicka-data`.
 
 ## Pridanie reštaurácie
 
@@ -46,7 +46,7 @@ Zobrazuje sa iba dnešné denné menu. Zvyšok jedálneho lístka sa nezobrazuje
 | `html` | všetko ostatné | Ak stránka vypisuje menu po dňoch, vezme dnešný deň. Rozozná „Čtvrtek“, „Čt 15.10.“ aj samotný dátum. Pri dátume musí sedieť dnešok, takže starý týždeň sa neukáže. Inak berie blok pod nadpisom „Denní / Polední menu / Lunch“. |
 | PDF | adresa na PDF alebo odkaz na PDF typu „Obědová nabídka“ | Prečíta text PDF a vezme dnešný deň. Naskenované PDF bez textu prečíta cez OCR. |
 | kotva | adresa končí `#niečo`, napríklad `#lunch-menu` | Číta len tú časť stránky, na ktorú kotva ukazuje. |
-| obrázok | menu je len ako obrázok | Obrázok prečíta cez OCR (Tesseract, čeština + angličtina) a vezme z neho dnešný deň. Zvládne aj týždenné menu v dvoch stĺpcoch. Ak je na obrázku týždeň, napríklad „12.10.2026-16.10.2026“, a dnešok doňho nepatrí, menu sa neukáže. Na karte je odkaz na pôvodný obrázok, lebo OCR môže urobiť drobné preklepy. |
+| obrázok | menu je len ako obrázok | Obrázok prečíta cez OCR (Tesseract, čeština + angličtina) a vezme z neho dnešný deň. Zvládne aj týždenné menu v dvoch stĺpcoch. Ak je na obrázku týždeň, napríklad „12.10.2026-16.10.2026“, a dnešok doňho nepatrí, menu sa neukáže. |
 | podstránka | odkaz typu „Denní menu“ | Ak na hlavnej stránke menu nie je, otvorí odkaz na denné menu alebo vložený iframe. Takú stránku číta voľnejšie: cena môže byť aj číslo bez „Kč“, a keď nič nenájde, ukáže obrázok s menu alebo text stránky. Celý jedálny lístok nikdy. |
 
 ### Keď sa denné menu nenájde

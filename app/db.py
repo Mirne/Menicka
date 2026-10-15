@@ -79,6 +79,13 @@ def upsert_restaurant(name: str, url: str, kind: str = "auto", selector: str | N
         return dict(c.execute("SELECT * FROM restaurants WHERE url = ?", (url,)).fetchone())
 
 
+def keep_only_restaurants(urls: list[str]) -> int:
+    """Remove restaurants (and their votes) whose URL is not in the list."""
+    with connect() as c:
+        marks = ",".join("?" * len(urls)) or "''"
+        return c.execute(f"DELETE FROM restaurants WHERE url NOT IN ({marks})", urls).rowcount
+
+
 def delete_restaurant(rid: int) -> bool:
     with connect() as c:
         return c.execute("DELETE FROM restaurants WHERE id = ?", (rid,)).rowcount > 0

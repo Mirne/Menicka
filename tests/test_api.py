@@ -45,14 +45,22 @@ def test_votes_one_per_person_per_day(client):
     assert client.delete("/api/votes/ROBO").json()["votes"] == []
 
 
-def test_add_and_delete_restaurant(client):
-    r = client.post("/api/restaurants", json={"name": "C", "url": "https://c.cz/menu"})
-    assert r.status_code == 201
-    rid = r.json()["id"]
-    assert client.post("/api/restaurants", json={"name": "D", "url": "ftp://x"}).status_code == 422
-    client.post("/api/votes", json={"name": "Ja", "restaurant_id": rid})
-    assert client.delete(f"/api/restaurants/{rid}").status_code == 204
-    assert client.get("/api/votes").json()["votes"] == []
+def test_yaml_is_the_list_of_restaurants(client, tmp_path, monkeypatch):
+    import app.main as main
+    rs = client.get("/api/restaurants").json()
+    client.post("/api/votes", json={"name": "Ja", "restaurant_id": rs[1]["id"]})
+    cfg = tmp_path / "r.yaml"
+    cfg.write_text("restaurants:\n  - name: A2\n    url: https://a.choiceqr.com\n"
+                   "  - name: C\n    url: https://c.cz\n    daily_section: Lunch\n    also: [pizz, dezert]\n")
+    main.seed_restaurants()
+    rs = client.get("/api/restaurants").json()
+    assert [(r["name"], r["daily_section"], r["also"]) for r in rs] == [
+        ("A2", None, None), ("C", "Lunch", "pizz, dezert")]
+    assert client.get("/api/votes").json()["votes"] == []  # B and its vote are gone
+
+
+def test_restaurants_cannot_be_added_over_http(client):
+    assert client.post("/api/restaurants", json={"name": "X", "url": "https://x.cz"}).status_code == 405
 
 
 def test_index_served(client):
@@ -70,13 +78,6 @@ def test_source_download(client, monkeypatch):
     r = client.get(f"/api/restaurants/{rid}/source")
     assert r.text == "<html>raw</html>"
     assert 'filename="a.html"' in r.headers["content-disposition"]
-
-
-def test_daily_section_and_also_saved(client):
-    r = client.post("/api/restaurants", json={"name": "E", "url": "https://e.cz", "daily_section": "Lunch",
-                                              "also": "pizz,  dezert"}).json()
-    assert r["daily_section"] == "Lunch"
-    assert r["also"] == "pizz, dezert"
 
 
 def test_old_database_gets_new_column(tmp_path, monkeypatch):

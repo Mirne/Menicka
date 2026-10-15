@@ -13,12 +13,12 @@ import yaml
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
 from . import db
 import httpx
 
-from .scrapers import KINDS, detect_kind, fetch_html, fetch_menu, parse_also
+from .scrapers import detect_kind, fetch_html, fetch_menu, parse_also
 
 logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
 log = logging.getLogger("menicka")
@@ -46,9 +46,14 @@ def seed_restaurants() -> None:
         log.info("no %s, skipping seed", RESTAURANTS_FILE)
         return
     data = yaml.safe_load(RESTAURANTS_FILE.read_text(encoding="utf-8")) or {}
-    for r in data.get("restaurants", []):
+    rs = data.get("restaurants") or []
+    for r in rs:
         db.upsert_restaurant(r["name"], r["url"], r.get("kind", "auto"), r.get("selector"),
                              r.get("daily_section"), ", ".join(parse_also(r.get("also"))))
+    # restaurants.yaml is the list: whatever was removed from it goes away
+    removed = db.keep_only_restaurants([r["url"] for r in rs])
+    if removed:
+        log.info("removed %d restaurants no longer in %s", removed, RESTAURANTS_FILE)
 
 
 async def refresh_one(r: dict) -> dict:
@@ -88,30 +93,6 @@ async def lifespan(_: FastAPI):
 app = FastAPI(title="Menicka", lifespan=lifespan)
 
 
-class RestaurantIn(BaseModel):
-    name: str = Field(min_length=1, max_length=80)
-    url: str = Field(min_length=8, max_length=500)
-    kind: str = "auto"
-    selector: str | None = Field(default=None, max_length=200)
-    daily_section: str | None = Field(default=None, max_length=100)
-    also: str | None = Field(default=None, max_length=200)
-
-    @field_validator("url")
-    @classmethod
-    def http_url(cls, v: str) -> str:
-        v = v.strip()
-        if not v.startswith(("http://", "https://")):
-            raise ValueError("URL musí začínať http:// alebo https://")
-        return v
-
-    @field_validator("kind")
-    @classmethod
-    def known_kind(cls, v: str) -> str:
-        if v not in KINDS:
-            raise ValueError(f"kind musí byť jedno z {KINDS}")
-        return v
-
-
 class VoteIn(BaseModel):
     name: str = Field(min_length=1, max_length=40)
     restaurant_id: int
@@ -130,22 +111,6 @@ def health() -> dict:
 @app.get("/api/restaurants")
 def get_restaurants() -> list[dict]:
     return [restaurant_view(r) for r in db.list_restaurants()]
-
-
-@app.post("/api/restaurants", status_code=201)
-async def add_restaurant(body: RestaurantIn) -> dict:
-    r = db.upsert_restaurant(body.name.strip(), body.url, body.kind, (body.selector or "").strip() or None,
-                             (body.daily_section or "").strip() or None,
-                             ", ".join(parse_also(body.also)) or None)
-    await refresh_one(r)
-    return restaurant_view(r)
-
-
-@app.delete("/api/restaurants/{rid}", status_code=204)
-def remove_restaurant(rid: int) -> None:
-    if not db.delete_restaurant(rid):
-        raise HTTPException(404, "Reštaurácia neexistuje")
-    _cache.pop(rid, None)
 
 
 @app.get("/api/restaurants/{rid}/source")

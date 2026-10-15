@@ -1,5 +1,6 @@
 # Reštaurácie, z ktorých sa sťahujú menučka.
-# Pri štarte sa nahrajú do databázy (podľa URL). Ďalšie sa dajú pridať aj priamo na stránke.
+# Toto je jediný zoznam: po úprave stačí `docker compose restart`.
+# Reštaurácia, ktorú odtiaľto zmažeš, zmizne zo stránky aj s jej dnešnými hlasmi.
 #
 #   name:     zobrazený názov
 #   url:      stránka s menu, PDF alebo obrázok. "#kotva" na konci adresy vyberie tú časť stránky.

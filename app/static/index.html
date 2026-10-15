@@ -27,21 +27,6 @@
 
     <section id="menus" class="menus"><p class="muted">Načítavam menu…</p></section>
 
-    <details class="panel" id="admin">
-      <summary>Reštaurácie</summary>
-      <ul id="restaurant-list" class="rlist"></ul>
-      <form id="add-form" class="row">
-        <label>Názov<input id="add-name" required maxlength="80"></label>
-        <label class="grow">URL stránky s menu<input id="add-url" required type="url" placeholder="https://…"></label>
-        <label>Typ<select id="add-kind">
-          <option value="auto">auto</option><option value="choiceqr">ChoiceQR</option><option value="html">webstránka</option>
-        </select></label>
-        <label>Názov sekcie denného menu <span class="muted">(voliteľné)</span><input id="add-daily" maxlength="100" placeholder="Lunch menu"></label>
-        <label>Pridať aj sekciu <span class="muted">(voliteľné)</span><input id="add-also" maxlength="200" placeholder="pizza"></label>
-        <label>CSS selektor <span class="muted">(voliteľné)</span><input id="add-selector" maxlength="200" placeholder="#denni-menu"></label>
-        <button type="submit">Pridať</button>
-      </form>
-    </details>
   </main>
   <div id="toast" role="status"></div>
   <script src="/static/app.js"></script>

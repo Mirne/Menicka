@@ -47,10 +47,6 @@ code { font-size: .92em; }
 .error { background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 8px 10px; font-size: 14px; }
 .links a { display: block; font-size: 13px; color: var(--accent); word-break: break-all; }
 .card footer { margin-top: auto; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.rlist { list-style: none; padding: 0; margin: 12px 0; }
-.rlist li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); }
-.rlist .url { color: var(--muted); font-size: 13px; word-break: break-all; }
-summary { cursor: pointer; font-weight: 600; }
 #toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 8px 14px; border-radius: 8px; opacity: 0; transition: opacity .2s; pointer-events: none; }
 #toast.on { opacity: .95; }
 @media (max-width: 520px) { .menus { grid-template-columns: 1fr; } .row > * { flex: 1 1 100%; } }

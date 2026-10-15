@@ -53,16 +53,11 @@ function renderSelects() {
   const cur = sel.value || store.get("menicka.restaurant");
   sel.innerHTML = state.restaurants.map((r) => `<option value="${r.id}">${esc(r.name)}</option>`).join("");
   if (cur && state.restaurants.some((r) => String(r.id) === String(cur))) sel.value = cur;
-  $("#restaurant-list").innerHTML = state.restaurants.map((r) => `<li>
-      <div><strong>${esc(r.name)}</strong> <span class="badge">${esc(r.detected_kind)}</span>
-      <div class="url">${esc(r.url)}${r.selector ? ` · <code>${esc(r.selector)}</code>` : ""}${r.daily_section ? ` · sekcia „${esc(r.daily_section)}“` : ""}${r.also ? ` · aj „${esc(r.also)}“` : ""}</div></div>
-      <button class="ghost small" data-del="${r.id}">Odstrániť</button></li>`).join("")
-    || `<li class="muted">Zatiaľ žiadne reštaurácie.</li>`;
 }
 
 function renderMenus() {
   if (!state.menus.length) {
-    $("#menus").innerHTML = `<p class="muted">Žiadne reštaurácie. Pridaj ich dole v sekcii Reštaurácie.</p>`;
+    $("#menus").innerHTML = `<p class="muted">Žiadne reštaurácie. Pridaj ich do súboru restaurants.yaml.</p>`;
     return;
   }
   const count = new Map();
@@ -74,9 +69,7 @@ function renderMenus() {
     const found = m.error && m.found_sections.length
       ? `<p class="muted">Sekcie na stránke: ${m.found_sections.map(esc).join(", ")}.<br>
          Ktorá je denné menu, nastavíš v <code>restaurants.yaml</code> cez <code>daily_section</code>.</p>` : "";
-    const images = m.from_image && m.images.length
-      ? `<a class="muted small-link" href="${esc(m.images[0])}" target="_blank" rel="noopener">Prečítané z obrázka menu, môžu tam byť drobné preklepy</a>`
-      : !m.sections.length && m.images.length
+    const images = !m.sections.length && m.images.length
         ? `<div class="links"><span class="muted">Obrázky s menu:</span>${m.images.map((src, n) => `<a href="${esc(src)}" target="_blank" rel="noopener">Obrázok ${n + 1}</a>`).join("")}</div>` : "";
     const links = !m.sections.length && m.links.length
       ? `<div class="links"><span class="muted">Možno je menu tu:</span>${m.links.map((l) => `<a href="${esc(l)}" target="_blank" rel="noopener">${esc(l)}</a>`).join("")}</div>` : "";
@@ -142,27 +135,6 @@ $("#refresh").addEventListener("click", async (e) => {
   catch (err) { toast(err.message); }
   finally { e.target.disabled = false; }
 });
-$("#add-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const btn = e.submitter; btn.disabled = true;
-  try {
-    await api("/api/restaurants", { method: "POST", body: JSON.stringify({
-      name: $("#add-name").value, url: $("#add-url").value, kind: $("#add-kind").value,
-      selector: $("#add-selector").value || null, daily_section: $("#add-daily").value || null,
-      also: $("#add-also").value || null }) });
-    e.target.reset();
-    await loadAll();
-    toast("Reštaurácia pridaná");
-  } catch (err) { toast(err.message); }
-  finally { btn.disabled = false; }
-});
-$("#restaurant-list").addEventListener("click", async (e) => {
-  const b = e.target.closest("[data-del]");
-  if (!b || !confirm("Odstrániť reštauráciu aj s dnešnými hlasmi?")) return;
-  await api(`/api/restaurants/${b.dataset.del}`, { method: "DELETE" });
-  await loadAll();
-});
-
 $("#vote-name").value = store.get("menicka.name") || "";
 loadAll().catch((err) => toast(err.message));
 setInterval(() => loadVotes().catch(() => {}), 30000);
