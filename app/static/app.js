@@ -41,9 +41,11 @@ function renderTally() {
     by.get(v.restaurant_id).push(v);
   }
   const names = new Map(state.restaurants.map((r) => [r.id, r.name]));
-  const rows = [...by.entries()].sort((a, b) => b[1].length - a[1].length);
+  const skip = new Set(state.restaurants.filter((r) => r.skip).map((r) => r.id));
+  // most votes first, "Nejdem na obed" always last
+  const rows = [...by.entries()].sort((a, b) => skip.has(a[0]) - skip.has(b[0]) || b[1].length - a[1].length);
   $("#tally").innerHTML = rows.length
-    ? rows.map(([rid, vs]) => `<div class="t"><strong>${esc(names.get(rid) || "?")} · ${vs.length}</strong>
+    ? rows.map(([rid, vs]) => `<div class="t${skip.has(rid) ? " skip" : ""}"><strong>${esc(names.get(rid) || "?")} · ${vs.length}</strong>
         <div class="who">${vs.map((v) => esc(v.name)).join(", ")}</div></div>`).join("")
     : `<p class="muted">Dnes ešte nikto nehlasoval.</p>`;
 }

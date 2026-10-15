@@ -41,12 +41,19 @@ def today() -> str:
     return now().date().isoformat()
 
 
+# Built-in voting option, always offered last.
+SKIP_URL = "vote-only:nejdem"
+SKIP_NAME = "Nejdem na obed"
+
+
 def seed_restaurants() -> None:
-    if not RESTAURANTS_FILE.exists():
-        log.info("no %s, skipping seed", RESTAURANTS_FILE)
-        return
-    data = yaml.safe_load(RESTAURANTS_FILE.read_text(encoding="utf-8")) or {}
-    rs = data.get("restaurants") or []
+    rs = []
+    if RESTAURANTS_FILE.exists():
+        data = yaml.safe_load(RESTAURANTS_FILE.read_text(encoding="utf-8")) or {}
+        rs = data.get("restaurants") or []
+    else:
+        log.info("no %s, only the built-in options", RESTAURANTS_FILE)
+    rs = [r for r in rs if r.get("url") != SKIP_URL] + [{"name": SKIP_NAME, "url": SKIP_URL}]
     for r in rs:
         # A restaurant without url is only a voting option (no menu to fetch).
         r["url"] = r.get("url") or f"vote-only:{r['name']}"
@@ -107,7 +114,7 @@ class VoteIn(BaseModel):
 
 
 def restaurant_view(r: dict) -> dict:
-    return {**r, "has_menu": has_menu(r),
+    return {**r, "has_menu": has_menu(r), "skip": r["url"] == SKIP_URL,
             "detected_kind": detect_kind(r["url"]) if r["kind"] == "auto" else r["kind"]}
 
 
@@ -118,7 +125,7 @@ def health() -> dict:
 
 @app.get("/api/restaurants")
 def get_restaurants() -> list[dict]:
-    return [restaurant_view(r) for r in db.list_restaurants()]
+    return sorted((restaurant_view(r) for r in db.list_restaurants()), key=lambda r: r["skip"])
 
 
 @app.get("/api/restaurants/{rid}/source")

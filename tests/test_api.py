@@ -28,7 +28,8 @@ def client(tmp_path, monkeypatch):
 
 def test_restaurants_seeded_and_kind_detected(client):
     rs = client.get("/api/restaurants").json()
-    assert [(r["name"], r["has_menu"]) for r in rs] == [("A", True), ("B", True), ("Pho Eden", False)]
+    assert [(r["name"], r["has_menu"]) for r in rs] == [
+        ("A", True), ("B", True), ("Pho Eden", False), ("Nejdem na obed", False)]
     assert [r["detected_kind"] for r in rs[:2]] == ["choiceqr", "html"]
 
 
@@ -57,7 +58,7 @@ def test_yaml_is_the_list_of_restaurants(client, tmp_path, monkeypatch):
     main.seed_restaurants()
     rs = client.get("/api/restaurants").json()
     assert [(r["name"], r["daily_section"], r["also"]) for r in rs] == [
-        ("A2", None, None), ("C", "Lunch", "pizz, dezert")]
+        ("A2", None, None), ("C", "Lunch", "pizz, dezert"), ("Nejdem na obed", None, None)]
     assert client.get("/api/votes").json()["votes"] == []  # B and its vote are gone
 
 
@@ -113,3 +114,17 @@ def test_day_titles_are_dropped():
     names = ["Čtvrtek", "Čtvrtek/ Thursday", "Čt 15.10.", "Čtvrtek 15.10.", "Denní menu", "Výběr pizz k polednímu menu", "Polévky"]
     r = drop_day_titles(MenuResult(sections=[MenuSection(n) for n in names]), date(2026, 10, 15))
     assert [s.name for s in r.sections] == ["", "", "", "", "Denní menu", "Výběr pizz k polednímu menu", "Polévky"]
+
+
+def test_not_going_option(client):
+    rs = client.get("/api/restaurants").json()
+    skip = rs[-1]
+    assert (skip["name"], skip["skip"], skip["has_menu"]) == ("Nejdem na obed", True, False)
+    v = client.post("/api/votes", json={"name": "Peter", "restaurant_id": skip["id"]}).json()
+    assert v["votes"][0]["restaurant_id"] == skip["id"]
+    assert "Nejdem na obed" not in [m["restaurant"]["name"] for m in client.get("/api/menus").json()]
+    import app.main as main
+    main.seed_restaurants()  # stays one option, keeps the vote
+    rs2 = client.get("/api/restaurants").json()
+    assert [r["name"] for r in rs2].count("Nejdem na obed") == 1 and rs2[-1]["id"] == skip["id"]
+    assert len(client.get("/api/votes").json()["votes"]) == 1
