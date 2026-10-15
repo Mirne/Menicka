@@ -129,3 +129,23 @@ def test_not_going_option(client):
     rs2 = client.get("/api/restaurants").json()
     assert [r["name"] for r in rs2].count("Nejdem na obed") == 1 and rs2[-1]["id"] == skip["id"]
     assert len(client.get("/api/votes").json()["votes"]) == 1
+
+
+def test_votes_from_previous_days_are_cleared(client):
+    import app.db as db
+    import app.main as main
+    rid = client.get("/api/restaurants").json()[0]["id"]
+    db.set_vote("2020-01-01", "Stary", rid)
+    client.post("/api/votes", json={"name": "Dnes", "restaurant_id": rid})
+    v = client.get("/api/votes").json()
+    assert v["day"] == main.today() and [x["name"] for x in v["votes"]] == ["Dnes"]
+    with db.connect() as c:
+        assert [r[0] for r in c.execute("SELECT name FROM votes")] == ["Dnes"]
+
+
+def test_new_day_starts_empty(client, monkeypatch):
+    import app.main as main
+    rid = client.get("/api/restaurants").json()[0]["id"]
+    client.post("/api/votes", json={"name": "Robo", "restaurant_id": rid})
+    monkeypatch.setattr(main, "today", lambda: "2099-01-02")
+    assert client.get("/api/votes").json() == {"day": "2099-01-02", "votes": []}

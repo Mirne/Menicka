@@ -98,6 +98,7 @@ async def refresh_loop() -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     db.init()
+    db.delete_votes_before(today())
     seed_restaurants()
     task = asyncio.create_task(refresh_loop()) if os.environ.get("DISABLE_REFRESH") != "1" else None
     yield
@@ -163,7 +164,9 @@ async def post_refresh() -> dict:
 
 @app.get("/api/votes")
 def get_votes() -> dict:
-    return {"day": today(), "votes": db.list_votes(today())}
+    day = today()
+    db.delete_votes_before(day)  # a new day starts with no votes
+    return {"day": day, "votes": db.list_votes(day)}
 
 
 @app.post("/api/votes")

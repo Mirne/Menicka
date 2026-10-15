@@ -107,6 +107,12 @@ def delete_vote(day: str, name: str) -> bool:
         return c.execute("DELETE FROM votes WHERE day = ? AND name_key = ?", (day, name.casefold())).rowcount > 0
 
 
+def delete_votes_before(day: str) -> int:
+    """Votes are for one day only: drop everything older."""
+    with connect() as c:
+        return c.execute("DELETE FROM votes WHERE day < ?", (day,)).rowcount
+
+
 def list_votes(day: str) -> list[dict]:
     with connect() as c:
         return [dict(r) for r in c.execute(

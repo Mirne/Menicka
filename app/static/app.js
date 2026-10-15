@@ -101,6 +101,7 @@ function render() { renderSelects(); renderTally(); renderMenus(); }
 
 async function loadVotes() {
   const v = await api("/api/votes");
+  if (v.day !== state.day) return loadAll();  // the day changed while the page was open
   state.votes = v.votes;
   renderTally();
   renderMenus();
@@ -110,6 +111,7 @@ async function loadAll() {
   const [restaurants, votes] = await Promise.all([api("/api/restaurants"), api("/api/votes")]);
   state.restaurants = restaurants;
   state.votes = votes.votes;
+  state.day = votes.day;
   $("#today").textContent = new Date(votes.day).toLocaleDateString(L.locale, { weekday: "long", day: "numeric", month: "numeric" });
   render();
   state.menus = await api("/api/menus");
