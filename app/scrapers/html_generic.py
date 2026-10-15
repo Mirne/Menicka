@@ -50,6 +50,63 @@ STOP_RE = re.compile(
 )
 
 
+# Name day notes ("Čtvrtek: svátek má Tereza") are not part of the menu.
+NAME_DAY_RE = re.compile(r"\s*[-–—:,]?\s*\b(sv[aá]tek|jmeniny|meniny)\b.*$", re.IGNORECASE)
+# Promotions and conditions around a lunch menu (matched without accents).
+NOISE_RE = re.compile(
+    r"zvyhodnen|doprodej|objednav|doporucujeme|plati pri|v dobe poledniho|po dobu poledniho|"
+    r"po celou dobu|kohoutkov|menu box|na odnos|vcetne polevky|cena menu|cena je|rezervac|"
+    r"\bza\s+\d+\s*(?:kc|,-)|\btel\.|telefon"
+)
+# "MENU 1, 2 ... 165 Kč": the price of the numbered dishes 1) and 2)
+MENU_PRICE_RE = re.compile(r"^(?:menu|menu c\.?|cislo)\s*(\d{1,2}(?:\s*(?:,|a|&|\+|-|–)\s*\d{1,2})*)\s*[:\-–.]*$")
+NUMBERED_RE = re.compile(r"^(?:menu\s*)?(\d{1,2})\s*[).:]")
+# "Pátek 16.10. Polévka: ..." -> heading and the rest on separate lines
+GLUED_HEAD_RE = re.compile(
+    r"^([^\W\d_]+\.?(?:\s*/\s*[^\W\d_]+)?\s+\d{1,2}\.\s?\d{1,2}\.(?:\s?\d{4})?)\s*[-–—:,]?\s+(\S.*)$"
+)
+
+
+def split_glued_headings(lines: list[str]) -> list[str]:
+    out = []
+    for line in lines:
+        m = GLUED_HEAD_RE.match(line)
+        if m and day_heading(m.group(1), date.today()) is not None:
+            out += [m.group(1), m.group(2)]
+        else:
+            out.append(line)
+    return out
+
+
+def menu_price_table(lines: list[str]) -> dict[int, float]:
+    """Prices given per dish number for the whole menu ("MENU 1, 2 165 Kč")."""
+    table: dict[int, float] = {}
+    for line in lines:
+        price, rest = find_price(line)
+        m = MENU_PRICE_RE.match(strip_accents(rest)) if price else None
+        if not m:
+            continue
+        spec = m.group(1)
+        if re.fullmatch(r"\d+\s*[-–]\s*\d+", spec):
+            a, b = map(int, re.split(r"\s*[-–]\s*", spec))
+            nums = range(a, b + 1)
+        else:
+            nums = [int(n) for n in re.findall(r"\d+", spec)]
+        for n in nums:
+            table.setdefault(n, price)
+    return table
+
+
+def is_noise(line: str) -> bool:
+    t = strip_accents(line)
+    if not re.search(r"[^\W_]", line):  # only punctuation, e.g. "```"
+        return True
+    price, rest = find_price(line)
+    if price and MENU_PRICE_RE.match(strip_accents(rest)):
+        return True
+    return bool(NOISE_RE.search(t)) or bool(re.match(r"^\s*(sv[aá]tek|jmeniny|meniny)\b", line, re.IGNORECASE))
+
+
 def is_daily_url(url: str, label: str = "") -> bool:
     return bool(DAILY_URL_RE.search(strip_accents(url + " " + label)))
 
@@ -128,6 +185,8 @@ def lines_to_sections(lines: list[str], default_name: str, relaxed: bool = False
             pending = None
 
     for raw in lines:
+        if is_noise(raw):
+            continue
         if raw.startswith("**"):  # "***Zvláštní nabídka ...***": a note, not a dish
             flush_pending()
             note = raw.strip("* ").strip()
@@ -237,6 +296,7 @@ class NotFound(Exception):
 
 def clean_title(line: str) -> str:
     """'Čtvrtek/ Thursday © BRNO, Denní Menu 11:00' -> 'Čtvrtek/ Thursday'."""
+    line = NAME_DAY_RE.sub("", line).strip() or line
     if len(line) <= 25:
         return line
     if weekday_of(line) is None:
@@ -302,7 +362,11 @@ def extra_sections(lines: list[str], today: date, texts: list[str], relaxed: boo
         block = daily_heading_block(lines, text, relaxed)
         if not block:
             continue
-        body = per_day_filter(block[1:], today)
+        body = block[1:]
+        heads = [i for i, l in enumerate(body) if day_heading(l, today) is not None]
+        if len(heads) == 1 or (heads and heads[0] > 0 and len(heads) < 2):
+            body = body[: heads[0]]
+        body = per_day_filter(body, today)
         if not body:
             continue
         for sec in lines_to_sections(cut_at_stop(body), block[0], relaxed):
@@ -320,6 +384,7 @@ def sections_from_lines(lines: list[str], today: date, pattern: str | None = Non
 
     Raises NotFound when the lines hold no menu for today.
     """
+    lines = split_glued_headings(lines)
     stale = stale_week(lines, today)
     block = today_block(lines, today, relaxed)
     if stale and block is not None:
@@ -338,6 +403,12 @@ def sections_from_lines(lines: list[str], today: date, pattern: str | None = Non
         sec.is_daily = True
     if not any(sec.items for sec in sections):
         raise NotFound("Na stránke som nenašiel denné menu.")
+    prices = menu_price_table(lines)
+    for sec in sections:
+        for item in sec.items:
+            m = NUMBERED_RE.match(strip_accents(item.name))
+            if item.price is None and m and int(m.group(1)) in prices:
+                item.price = prices[int(m.group(1))]
     if also:
         sections += extra_sections(lines, today, also, relaxed, sections)
     return sections

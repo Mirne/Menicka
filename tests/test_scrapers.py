@@ -275,8 +275,7 @@ def test_everest_like_text_without_prices_is_shown_as_text():
     r = everest(page)
     assert r.error is None
     assert [(i.name, i.price) for s in r.sections for i in s.items] == [
-        ("Polévka: Tomatová", None), ("Kuřecí kari s rýží", None), ("Zeleninové korma s naan", None),
-        ("Cena menu s polévkou", 149.0)]
+        ("Polévka: Tomatová", None), ("Kuřecí kari s rýží", None), ("Zeleninové korma s naan", None)]
 
 
 def test_everest_like_short_text_page_is_shown():
@@ -479,3 +478,81 @@ def test_also_with_day_headings_inside_the_pizza_block():
     r = run_fetch({url: page}, url, also=["pizz"])
     pizza = [s for s in r.sections if "pizz" in s.name.lower()]
     assert [(i.name, i.price) for i in pizza[0].items] == [("Diavola", 169.0), ("Prosciutto", 179.0)]
+
+
+# --- Shapes from real cards (screenshots of 15.10.2026)
+
+U_DREVAKA = """<html><body><main><h1>Polední menu</h1>
+<p><strong>Středa 14.10.</strong> Polévka: Gulášová (1,9)</p><p>1) Svíčková na smetaně, knedlík (1,3,7,9,10), 150g 174 Kč</p>
+<p><strong>Čtvrtek 15.10.</strong> Polévka: Hovězí vývar s nudlemi (1,3,9)</p>
+<p>1) Thajské červené kari s kuřecím masem, kokosovým mlékem, jasmínová rýže (1,3,6,7,9,10), 120g 174 Kč</p>
+<p>2) Smažené řízečky z vepřové kotletky, bramborová máslová kaše, salátek (1,3,6,7,9), 150g 174 Kč</p>
+<p>3) Little Chef Burger (Hovězí maso, Chedar, grilovaná cibulka, salát, dresink) hranolky a dresink (1,3,6,7,9), 80g 214 Kč</p>
+<p>4) Grilovaná kuřecí prsíčka s cheddarovou omáčkou, americké brambory (1,3,6,7,9), 140g 184 Kč</p>
+<p><strong>Pátek 16.10.</strong> Polévka: Bramborová s kořenovou zeleninou (1,6,9)</p>
+<p>1) Smažený sýr s máslovými bramborami, naše tatarská omáčka (1,3,6,7,9), 100g 174 Kč</p>
+<p>2) Gangster Bowl - menu version (8 hodin pečené vepřové maso) (1,3,6,7,9,10,12), 100g 174 Kč</p>
+</main></body></html>"""
+
+
+def test_u_drevaka_day_heading_glued_to_soup():
+    url = "https://drevak.example/menu/pages/poledni-menu"
+    r = run_fetch({url: U_DREVAKA}, url)
+    assert r.error is None, r.error
+    [sec] = r.sections
+    assert sec.name == "Čtvrtek 15.10."
+    names = [i.name for i in sec.items]
+    assert names[0] == "Polévka: Hovězí vývar s nudlemi (1,3,9)"
+    assert len(names) == 5 and names[-1].startswith("4) Grilovaná")
+    assert not any("Smažený sýr" in n or "Bramborová s kořenovou" in n for n in names)
+
+
+def test_name_day_is_not_part_of_the_menu():
+    lines = ["Obědová nabídka", "Středa: svátek má Tereza", "Polévka: Česnečka", "150 g Kuře na paprice 189 Kč",
+             "Čtvrtek: svátek má Tereza", "0,2 l Drůbeží vývar s masem a nudlemi", "Svátek má Tereza",
+             "150 g Plněný paprikový lusk, rajská omáčka, těstovina 189 Kč",
+             "150 g Hovězí guláš, kynutý knedlík 189 Kč", "Pátek: Svátek slaví Lukáš", "150 g Řízek 189 Kč"]
+    from app.scrapers.html_generic import sections_from_lines
+    [sec] = sections_from_lines(lines, THURSDAY, relaxed=True)
+    assert sec.name == "Čtvrtek"
+    assert [i.name for i in sec.items][0] == "0,2 l Drůbeží vývar s masem a nudlemi"
+    assert not any("svátek" in i.name.lower() for i in sec.items)
+
+
+LA_STRADA_REAL = """<html><body><main><h1>Polední menu 12.10. - 16.10.</h1>
+<h3>Pizza týdne</h3>
+<p>Pizza Primavera (rajčatový základ, mozzarella, cherry, kukuřice, špenát) 179 Kč</p>
+<p>Po dobu poledního menu zvýhodněná cena čepovaného piva Pilsner Urquell 0,3 l 39 Kč</p>
+<p>zvýhodněná cena čepovaného nealkoholického piva 0,3 l 29 Kč</p>
+<p>Kohoutková voda zdarma po celou dobu menu!!</p>
+<p>V době poledního menu zvýhodněná cena pizzy na odnos:</p><p>Pizza z La Strady za 145 Kč</p>
+<p>Cena je včetně menu boxu a platí při objednávce min. 2 ks!!</p>
+<p>Bezlepková pizza v době poledního menu + 35 Kč</p>
+<p>Doporučujeme objednávky dopředu telefonicky na tel 773 222 211</p>
+<p>Doprodej poledního menu v době od 15:00 do 18:00</p><p>neprodané obědové menu 1 a 4 za 89 Kč</p>
+<p>```</p>
+<p>MENU 1, 2 165 Kč</p><p>MENU 3, 4 175 Kč</p><p>Cena menu je včetně polévky.</p>
+<p>Po 12.10.</p><p>Čočková polévka s párkem</p>
+<p>1) Spaghetti Aglio e Olio &amp; Pollo s kuřecím masem, sušenými rajčaty, parmezánem a rukolou</p>
+<p>2) Hovězí guláš, houskový knedlík</p>
+<p>Čt 15.10.</p><p>Kulajda s vejcem</p>
+<p>1) Penne all'arrabbiata s kuřecím masem</p><p>2) Smažený vepřový řízek, bramborový salát</p>
+<p>3) Risotto ai funghi s parmezánem</p><p>4) Grilovaný losos, zeleninové rizoto</p>
+<p>Pá 16.10.</p><p>Rybí polévka</p><p>1) Lasagne alla bolognese</p>
+</main></body></html>"""
+
+
+def test_la_strada_today_with_prices_from_menu_table_and_only_the_pizza():
+    url = "https://lastrada.example/poledni-menu/"
+    r = run_fetch({url: LA_STRADA_REAL}, url, also=["pizz"])
+    assert r.error is None, r.error
+    day, pizza = r.sections
+    assert day.name == "Čt 15.10."
+    assert [(i.name, i.price) for i in day.items] == [
+        ("Kulajda s vejcem", None),
+        ("1) Penne all'arrabbiata s kuřecím masem", 165.0),
+        ("2) Smažený vepřový řízek, bramborový salát", 165.0),
+        ("3) Risotto ai funghi s parmezánem", 175.0),
+        ("4) Grilovaný losos, zeleninové rizoto", 175.0)]
+    assert [(i.name, i.price) for i in pizza.items] == [
+        ("Pizza Primavera (rajčatový základ, mozzarella, cherry, kukuřice, špenát)", 179.0)]
