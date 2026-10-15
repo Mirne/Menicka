@@ -217,3 +217,99 @@ def test_menu_images_are_collected():
       <a href="/files/obedy.png">Polední menu</a></body></html>"""
     r = parse_html(page, "https://www.example.cz/", today=THURSDAY)
     assert r.images == ["https://www.example.cz/uploads/denni-menu-42.jpg", "https://www.example.cz/files/obedy.png"]
+
+
+# --- Shapes seen on the real sites: Everest has /denni-menu/ and /jidelni-listek/ links,
+# Padagali's ChoiceQR "section:menu" has only the regular menu sections.
+
+EVEREST_HOME = """<html><body><header><a href="/">Everest</a><a href="/denni-menu/">Denní menu</a>
+<a href="/jidelni-listek/">Jídelní lístek</a></header><main><h1>Indická a nepálská restaurace</h1>
+<p>Vítejte v restauraci Everest. Vaříme tradiční indická a nepálská jídla každý den od 11 do 22 hodin.</p>
+</main></body></html>"""
+FULL_LISTEK = """<html><body><main><h1>Jídelní lístek</h1><p>Chicken tikka masala 249 Kč</p>
+<p>Lamb korma 289 Kč</p></main></body></html>"""
+
+
+def everest(daily_page_html: str):
+    return run_fetch({"https://www.example.cz/": EVEREST_HOME,
+                      "https://www.example.cz/denni-menu/": daily_page_html,
+                      "https://www.example.cz/jidelni-listek/": FULL_LISTEK}, "https://www.example.cz/")
+
+
+def test_everest_like_week_with_short_days_and_bare_prices():
+    page = """<html><body><header>Everest</header><main><h1>Denní menu 12.10. – 16.10.</h1>
+    <p>Po 12.10.</p><p>1. Chicken curry, rýže 149</p>
+    <p>Čt 15.10.</p><p>Polévka: Dal shorba</p><p>1. Butter chicken, naan 159</p><p>2. Palak paneer, rýže 149</p>
+    <p>Pá 16.10.</p><p>1. Lamb rogan josh 179</p></main>
+    <footer>Tel. 773 990 837, Veveří 61</footer></body></html>"""
+    r = everest(page)
+    assert r.error is None, r.error
+    assert r.source_url == "https://www.example.cz/denni-menu/"
+    assert [(i.name, i.price) for s in r.sections for i in s.items] == [
+        ("Polévka: Dal shorba", None), ("1. Butter chicken, naan", 159.0), ("2. Palak paneer, rýže", 149.0)]
+
+
+def test_everest_like_single_day_page_without_headings():
+    page = """<html><body><header><nav>Domů Denní menu Kontakt</nav></header><main>
+    <p>Polévka dle denní nabídky</p><p>Menu 1 Chicken madras, rýže 145</p><p>Menu 2 Dal makhani, naan 139</p>
+    </main><footer>Otevřeno Po–Pá 11:00 – 22:00, tel. 773 990 837</footer></body></html>"""
+    r = everest(page)
+    assert r.error is None, r.error
+    assert [i.price for s in r.sections for i in s.items if i.price] == [145.0, 139.0]
+
+
+def test_everest_like_menu_as_image():
+    page = """<html><body><header><img src="/logo.png"></header><main><h1>Denní menu</h1>
+    <img src="/wp-content/uploads/2026/10/IMG_4821.jpg" width="1080" height="1350"></main></body></html>"""
+    r = everest(page)
+    assert r.error == "Denné menu je na obrázku."
+    assert r.images == ["https://www.example.cz/wp-content/uploads/2026/10/IMG_4821.jpg"]
+    assert r.source_url == "https://www.example.cz/denni-menu/"
+
+
+def test_everest_like_text_without_prices_is_shown_as_text():
+    page = """<html><body><main><h1>Denní menu</h1><p>Polévka: Tomatová</p>
+    <p>Kuřecí kari s rýží</p><p>Zeleninové korma s naan</p><p>Cena menu 149 Kč s polévkou.</p></main></body></html>"""
+    r = everest(page)
+    assert r.error is None
+    assert [(i.name, i.price) for s in r.sections for i in s.items] == [
+        ("Polévka: Tomatová", None), ("Kuřecí kari s rýží", None), ("Zeleninové korma s naan", None),
+        ("Cena menu s polévkou", 149.0)]
+
+
+def test_everest_like_short_text_page_is_shown():
+    page = """<html><body><main><h1>Denní menu</h1><p>Polévka: Tomatová</p>
+    <p>Kuřecí kari s rýží</p><p>Zeleninové korma s naan</p></main></body></html>"""
+    r = everest(page)
+    assert r.error is None, r.error
+    assert [i.name for s in r.sections for i in s.items] == [
+        "Polévka: Tomatová", "Kuřecí kari s rýží", "Zeleninové korma s naan"]
+
+
+def test_last_weeks_dated_menu_is_not_today():
+    page = """<html><body><main><p>Středa 7.10.</p><p>Dal 139</p><p>Čtvrtek 8.10.</p><p>Korma 149</p></main></body></html>"""
+    r = everest(page)
+    assert r.error == "Na dnešný deň stránka menu neuvádza."
+
+
+def test_choiceqr_follows_lunch_menu_found_in_page_data():
+    base = "https://x.choiceqr.com/section:menu"
+    main = {"props": {"pageProps": {
+        "menus": [{"_id": "m1", "name": "Menu", "slug": "menu"}, {"_id": "m2", "name": "Polední menu", "slug": "poledni-menu"}],
+        "sections": FULL_MENU_ONLY["props"]["pageProps"]["sections"]}}}
+    lunch = {"props": {"pageProps": {"sections": [
+        {"_id": "l1", "name": "Polední menu", "items": [
+            {"_id": "x", "name": "Chicken curry", "price": 15900, "available": False},
+            {"_id": "y", "name": "Dal tadka", "price": 13900}]}]}}}
+    r = run_fetch({base: next_data(main), "https://x.choiceqr.com/section:poledni-menu": next_data(lunch)}, base)
+    assert r.error is None, r.error
+    assert [(i.name, i.price) for s in r.sections for i in s.items] == [("Chicken curry", 159.0), ("Dal tadka", 139.0)]
+
+
+def test_choiceqr_reports_lunch_menu_it_could_not_open():
+    base = "https://x.choiceqr.com/section:menu"
+    main = {"props": {"pageProps": {"menus": [{"_id": "m2", "name": "Lunch menu", "slug": "lunch"}],
+                                    "sections": FULL_MENU_ONLY["props"]["pageProps"]["sections"]}}}
+    r = run_fetch({base: next_data(main)}, base)
+    assert r.error == "Denné menu som nerozoznal. Na stránke je aj: Lunch menu."
+    assert r.found_sections == ["Předkrmy", "Tikka specials"]

@@ -52,20 +52,22 @@ def only_daily(result: MenuResult) -> MenuResult:
     result.sections = [s for s in result.sections if s.is_daily and s.items]
     if not result.sections:
         result.error = "Denné menu som nerozoznal."
+        if result.other_menus:
+            result.error += " Na stránke je aj: " + ", ".join(result.other_menus) + "."
     return result
 
 
 async def _parse(client: httpx.AsyncClient, url: str, kind: str, selector: str | None,
-                 today: date | None, pattern: str | None) -> MenuResult:
+                 today: date | None, pattern: str | None, daily_page: bool = False) -> MenuResult:
     html = await fetch_html(url, client)
     if kind == "choiceqr":
         result = only_daily(parse_choiceqr(html, url, today, pattern))
         if result.error and not result.found_sections:  # page changed shape: try the visible text
-            fallback = parse_html(html, url, selector, today, pattern)
+            fallback = parse_html(html, url, selector, today, pattern, daily_page)
             if not fallback.error:
                 return fallback
         return result
-    return only_daily(parse_html(html, url, selector, today, pattern))
+    return only_daily(parse_html(html, url, selector, today, pattern, daily_page))
 
 
 async def fetch_menu(url: str, kind: str = "auto", selector: str | None = None,
@@ -76,20 +78,31 @@ async def fetch_menu(url: str, kind: str = "auto", selector: str | None = None,
     client = client or new_client()
     try:
         result = await _parse(client, url, kind, selector, today, daily_section)
-        # The menu often lives in an embedded iframe or on a "Denní menu" subpage: follow one hop.
-        if result.error and not result.found_sections:
-            for link in result.links:
-                if link.lower().split("?")[0].endswith(FILE_EXT):
-                    continue
-                sub_kind = detect_kind(link)
-                try:
-                    sub = await _parse(client, link, sub_kind, None, today, daily_section)
-                except httpx.HTTPError:
-                    continue
-                if not sub.error:
-                    sub.links = result.links
-                    sub.images = sub.images or result.images
-                    return sub
+        # The menu often lives on a "Denní menu" subpage, in an iframe, or (ChoiceQR) in
+        # another menu of the same venue: follow one hop.
+        if not result.error:
+            return result
+        best_failure: MenuResult | None = None
+        for link in result.links[:6]:
+            if link.lower().split("?")[0].endswith(FILE_EXT):
+                continue
+            is_daily = link in result.daily_links
+            try:
+                sub = await _parse(client, link, detect_kind(link), None, today, daily_section, is_daily)
+            except httpx.HTTPError:
+                continue
+            if not sub.error:
+                sub.links = list(dict.fromkeys(sub.links + result.links))
+                sub.images = sub.images or result.images
+                return sub
+            if is_daily and best_failure is None:
+                best_failure = sub
+        if best_failure is not None:
+            # The daily-menu page exists but could not be read: its own error and images say more.
+            best_failure.images = best_failure.images or result.images
+            best_failure.links = list(dict.fromkeys(result.links + best_failure.links))
+            best_failure.found_sections = best_failure.found_sections or result.found_sections
+            return best_failure
         return result
     except httpx.HTTPError as e:
         log.warning("fetch %s failed: %s", url, e)

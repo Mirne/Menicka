@@ -32,6 +32,10 @@ class MenuResult:
     images: list[str] = field(default_factory=list)
     # Names of every section found, kept for diagnostics when no daily one matched.
     found_sections: list[str] = field(default_factory=list)
+    # Subset of `links` that point at a page which is itself the daily menu.
+    daily_links: list[str] = field(default_factory=list)
+    # ChoiceQR: names of other menus/sections that sound like a lunch menu (diagnostics).
+    other_menus: list[str] = field(default_factory=list)
     error: str | None = None
 
     @property
@@ -121,13 +125,65 @@ PRICE_RE = re.compile(
 )
 
 
-def find_price(text: str) -> tuple[float | None, str]:
-    """Return (price, text without the price) using the last price on the line."""
-    matches = list(PRICE_RE.finditer(text))
+# "Kč 129" / "CZK 129"
+PRICE_PREFIX_RE = re.compile(r"(?:kč|kc|czk)\s*(\d{1,4}(?:[.,]\d{1,2})?)(?![\d])", re.IGNORECASE)
+# A bare number at the end of a dish line ("Chicken korma ... 159"), trusted only on daily-menu pages.
+BARE_PRICE_RE = re.compile(r"(?<![\d.,/:+])(\d{2,3})(?:[.,]-)?\s*$")
+PHONE_OR_TIME_RE = re.compile(r"\d{3}\s?\d{3}\s?\d{3}|\d{1,2}[:.]\d{2}\s*[-–]|tel|telefon|\bpsc\b", re.IGNORECASE)
+
+
+def find_price(text: str, relaxed: bool = False) -> tuple[float | None, str]:
+    """Return (price, text without the price) using the last price on the line.
+
+    `relaxed` also accepts a bare number (30-999) at the end of a line that has words in it.
+    """
+    matches = list(PRICE_RE.finditer(text)) or list(PRICE_PREFIX_RE.finditer(text))
+    if not matches and relaxed and re.search(r"[^\W\d_]{3}", text) and not PHONE_OR_TIME_RE.search(strip_accents(text)):
+        m = BARE_PRICE_RE.search(text)
+        if m and 30 <= int(m.group(1)) <= 999:
+            matches = [m]
     if not matches:
         return None, text
     m = matches[-1]
     price = float(m.group(1).replace(",", "."))
-    rest = (text[: m.start()] + text[m.end():]).strip()
+    rest = clean_space(text[: m.start()] + " " + text[m.end():])
     rest = re.sub(r"[\s.…·•\-–—|:]+$", "", rest).strip()
     return price, rest
+
+
+
+SHORT_WEEKDAYS = ("po", "ut", "st", "ct", "pa", "so", "ne")
+DATE_RE = re.compile(r"(?<!\d)(\d{1,2})\.\s?(\d{1,2})\.(?:\s?(\d{4}))?")
+
+
+def date_in(text: str, today: date) -> date | None:
+    m = DATE_RE.search(text)
+    if not m:
+        return None
+    try:
+        return date(int(m.group(3) or today.year), int(m.group(2)), int(m.group(1)))
+    except ValueError:
+        return None
+
+
+def day_heading(text: str, today: date) -> tuple[object, bool] | None:
+    """If a short line is a day heading, return (key, is_today).
+
+    Accepts "Čtvrtek", "Čtvrtek 15.10.", "Čt 15. 10.", "15.10.2026". When the line has
+    a date, the date decides, so last week's menu does not count as today's.
+    """
+    if len(text) > 60:
+        return None
+    t = strip_accents(clean_space(text))
+    d = date_in(t, today)
+    if weekday_of(t) is None:
+        if d is None:
+            return None
+        words = re.sub(r"[^a-z ]", " ", DATE_RE.sub(" ", t)).split()
+        # only the date, optionally with a short weekday name ("Čt") or "menu"
+        if any(w not in SHORT_WEEKDAYS and w not in ("menu", "denni", "dne") for w in words):
+            return None
+    if d is not None:
+        return d, d == today
+    wd = weekday_of(t)
+    return wd, wd == today.weekday()

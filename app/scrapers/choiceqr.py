@@ -16,14 +16,18 @@ from typing import Any
 
 from bs4 import BeautifulSoup
 
-from .base import MenuItem, MenuResult, MenuSection, clean_space, mark_daily
+from urllib.parse import urljoin, urlparse
+
+from .base import MenuItem, MenuResult, MenuSection, clean_space, looks_daily, mark_daily, strip_accents
 
 NAME_KEYS = ("name", "title", "label")
 PRICE_KEYS = ("price", "cost", "amount", "priceValue")
 DESC_KEYS = ("description", "desc", "text", "subtitle")
 REF_KEYS = ("category", "categoryId", "section", "sectionId", "menuSection", "group", "groupId", "parentId")
 ID_KEYS = ("_id", "id", "uuid", "slug")
-HIDDEN_KEYS = ("hidden", "isHidden", "archived", "deleted")
+# Only permanently removed items are skipped. "available": false is often just "outside
+# serving hours", which would hide a lunch menu fetched before lunch starts.
+HIDDEN_KEYS = ("hidden", "isHidden", "archived", "deleted", "isDeleted", "isArchived")
 LANG_ORDER = ("cs", "cz", "sk", "en")
 
 
@@ -77,7 +81,7 @@ def _is_item(d: dict) -> bool:
 
 
 def _hidden(d: dict) -> bool:
-    return any(d.get(k) is True for k in HIDDEN_KEYS) or d.get("available") is False
+    return any(d.get(k) is True for k in HIDDEN_KEYS)
 
 
 def _ref_name(d: dict, by_id: dict[str, str]) -> str:
@@ -160,6 +164,46 @@ def extract_from_json(data: Any, today: date | None = None, pattern: str | None 
     return result
 
 
+SLUG_KEYS = ("slug", "alias", "path", "url", "link", "href")
+
+
+def daily_candidates(data: Any, base_url: str, pattern: str | None = None) -> tuple[list[str], list[str]]:
+    """Other menus/sections of the venue whose name sounds like a lunch menu.
+
+    Returns (names, urls to try). ChoiceQR's URL scheme for them is not documented, so
+    for a slug both the "section:<slug>" and "menu/<slug>" forms are tried.
+    """
+    want = strip_accents(pattern) if pattern else None
+    origin = "{0.scheme}://{0.netloc}".format(urlparse(base_url))
+    names: list[str] = []
+    urls: list[str] = []
+
+    def walk(node: Any) -> None:
+        if isinstance(node, dict):
+            n = _name(node)
+            if n and not _is_item(node) and ((want in strip_accents(n)) if want else looks_daily(n)):
+                names.append(n)
+                for k in SLUG_KEYS:
+                    v = node.get(k)
+                    if isinstance(v, str) and v.strip():
+                        v = v.strip()
+                        if v.startswith(("http://", "https://", "/")):
+                            urls.append(urljoin(origin + "/", v))
+                        elif "/" not in v and " " not in v:
+                            urls.extend([f"{origin}/section:{v}", f"{origin}/menu/{v}"])
+                        elif v.startswith(("section:", "menu")):
+                            urls.append(f"{origin}/{v}")
+            for v in node.values():
+                walk(v)
+        elif isinstance(node, list):
+            for v in node:
+                walk(v)
+
+    walk(data)
+    here = base_url.rstrip("/")
+    return list(dict.fromkeys(names)), [u for u in dict.fromkeys(urls) if u.rstrip("/") != here][:6]
+
+
 def parse_choiceqr(html: str, url: str, today: date | None = None, pattern: str | None = None) -> MenuResult:
     soup = BeautifulSoup(html, "lxml")
     payloads: list[Any] = []
@@ -181,5 +225,9 @@ def parse_choiceqr(html: str, url: str, today: date | None = None, pattern: str 
     for data in payloads:
         sections = extract_from_json(data, today, pattern)
         if sections:
-            return MenuResult(sections=sections, source_url=url)
+            names, urls = daily_candidates(data, url, pattern)
+            # Section names already in this menu are not "other menus".
+            have = {s.name for s in sections}
+            return MenuResult(sections=sections, source_url=url, links=urls, daily_links=urls,
+                              other_menus=[n for n in names if n not in have])
     return MenuResult(source_url=url, error="Na stránke ChoiceQR som nenašiel dáta menu.")
