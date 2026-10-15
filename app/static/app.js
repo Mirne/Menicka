@@ -1,5 +1,5 @@
 const $ = (s) => document.querySelector(s);
-const state = { restaurants: [], menus: [], votes: [], showAll: false };
+const state = { restaurants: [], menus: [], votes: [] };
 
 const store = {
   get(k) { try { return localStorage.getItem(k); } catch { return null; } },
@@ -55,7 +55,7 @@ function renderSelects() {
   if (cur && state.restaurants.some((r) => String(r.id) === String(cur))) sel.value = cur;
   $("#restaurant-list").innerHTML = state.restaurants.map((r) => `<li>
       <div><strong>${esc(r.name)}</strong> <span class="badge">${esc(r.detected_kind)}</span>
-      <div class="url">${esc(r.url)}${r.selector ? ` · <code>${esc(r.selector)}</code>` : ""}</div></div>
+      <div class="url">${esc(r.url)}${r.selector ? ` · <code>${esc(r.selector)}</code>` : ""}${r.daily_section ? ` · sekcia „${esc(r.daily_section)}“` : ""}</div></div>
       <button class="ghost small" data-del="${r.id}">Odstrániť</button></li>`).join("")
     || `<li class="muted">Zatiaľ žiadne reštaurácie.</li>`;
 }
@@ -68,23 +68,25 @@ function renderMenus() {
   const count = new Map();
   for (const v of state.votes) count.set(v.restaurant_id, (count.get(v.restaurant_id) || 0) + 1);
   $("#menus").innerHTML = state.menus.map(({ restaurant: r, result: m, fetched_at }) => {
-    const daily = m.sections.filter((s) => s.is_daily);
-    const shown = state.showAll || !daily.length ? m.sections : daily;
-    const hiddenCount = m.sections.length - shown.length;
-    const body = shown.map((s) => `<div class="sec"><h4>${esc(s.name)}</h4>${s.items.map((i) => `
+    const body = m.sections.map((s) => `<div class="sec"><h4>${esc(s.name)}</h4>${s.items.map((i) => `
         <div class="item"><div>${esc(i.name)}${i.description ? `<div class="desc">${esc(i.description)}</div>` : ""}</div>
         <span class="price">${fmtPrice(i.price)}</span></div>`).join("")}</div>`).join("");
-    const note = !state.showAll && !daily.length && m.sections.length
-      ? `<p class="muted">Denné menu som nerozoznal, zobrazujem všetko.</p>` : "";
+    const found = m.error && m.found_sections.length
+      ? `<p class="muted">Sekcie na stránke: ${m.found_sections.map(esc).join(", ")}.<br>
+         Ktorá je denné menu, nastavíš v <code>restaurants.yaml</code> cez <code>daily_section</code>.</p>` : "";
+    const images = !m.sections.length && m.images.length
+      ? `<div class="imgs">${m.images.map((src) => `<a href="${esc(src)}" target="_blank" rel="noopener"><img src="${esc(src)}" alt="Menu ${esc(r.name)}" loading="lazy"></a>`).join("")}</div>` : "";
     const links = !m.sections.length && m.links.length
       ? `<div class="links"><span class="muted">Možno je menu tu:</span>${m.links.map((l) => `<a href="${esc(l)}" target="_blank" rel="noopener">${esc(l)}</a>`).join("")}</div>` : "";
+    const debug = m.error
+      ? `<a class="muted small-link" href="/api/restaurants/${r.id}/source">Stiahnuť HTML stránky na kontrolu</a>` : "";
     const n = count.get(r.id) || 0;
     return `<article class="card">
       <header><h3><a href="${esc(m.source_url || r.url)}" target="_blank" rel="noopener">${esc(r.name)}</a></h3>
         ${n ? `<span class="badge">${n} ${n === 1 ? "ide" : "idú"}</span>` : ""}</header>
-      ${m.error ? `<div class="error">${esc(m.error)}</div>` : ""}
-      ${note}${body}${links}
-      ${hiddenCount > 0 ? `<p class="muted">+ ${hiddenCount} ďalších sekcií v celom menu</p>` : ""}
+      ${m.error && !m.images.length ? `<div class="error">${esc(m.error)}</div>` : ""}
+      ${m.error && m.images.length ? `<p class="muted">Denné menu je na obrázku:</p>` : ""}
+      ${found}${body}${images}${links}${debug}
       <footer><span class="muted">stiahnuté ${fmtTime(fetched_at)}</span>
         <button class="small" data-go="${r.id}">Idem sem</button></footer>
     </article>`;
@@ -133,7 +135,6 @@ $("#menus").addEventListener("click", (e) => {
   const b = e.target.closest("[data-go]");
   if (b) vote(b.dataset.go).catch((err) => toast(err.message));
 });
-$("#show-all").addEventListener("change", (e) => { state.showAll = e.target.checked; store.set("menicka.showAll", state.showAll ? "1" : ""); renderMenus(); });
 $("#refresh").addEventListener("click", async (e) => {
   e.target.disabled = true;
   try { await api("/api/menus/refresh", { method: "POST" }); state.menus = await api("/api/menus"); renderMenus(); toast("Menu obnovené"); }
@@ -145,7 +146,8 @@ $("#add-form").addEventListener("submit", async (e) => {
   const btn = e.submitter; btn.disabled = true;
   try {
     await api("/api/restaurants", { method: "POST", body: JSON.stringify({
-      name: $("#add-name").value, url: $("#add-url").value, kind: $("#add-kind").value, selector: $("#add-selector").value || null }) });
+      name: $("#add-name").value, url: $("#add-url").value, kind: $("#add-kind").value,
+      selector: $("#add-selector").value || null, daily_section: $("#add-daily").value || null }) });
     e.target.reset();
     await loadAll();
     toast("Reštaurácia pridaná");
@@ -160,7 +162,5 @@ $("#restaurant-list").addEventListener("click", async (e) => {
 });
 
 $("#vote-name").value = store.get("menicka.name") || "";
-state.showAll = store.get("menicka.showAll") === "1";
-$("#show-all").checked = state.showAll;
 loadAll().catch((err) => toast(err.message));
 setInterval(() => loadVotes().catch(() => {}), 30000);

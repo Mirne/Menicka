@@ -34,18 +34,32 @@ restaurants:
     selector: "#denni-menu"   # voliteľné: CSS selektor časti stránky s menu
 ```
 
-Po úprave stačí `docker compose restart`.
+Po úprave stačí `docker compose restart`. Popis polí `selector` a `daily_section` je nižšie.
 
 ### Ako sa menu číta
 
+Zobrazuje sa iba dnešné denné menu. Zvyšok jedálneho lístka sa nezobrazuje.
+
 | Typ | Kedy | Ako |
 |---|---|---|
-| `choiceqr` | adresa na `choiceqr.com` | Z JSON dát stránky (`__NEXT_DATA__`) vytiahne položky s názvom a cenou a ich sekcie. |
-| `html` | všetko ostatné | Ak stránka vypisuje menu po dňoch (Pondělí, Úterý…), vezme dnešný deň. Inak blok pod nadpisom „Denní / Polední menu / Lunch“. Inak všetky riadky s cenou. Ak nič nenájde, skúsi odkaz „Denní menu“ na tom istom webe. |
+| `choiceqr` | adresa na `choiceqr.com` | Z dát stránky (`__NEXT_DATA__`) vytiahne sekcie a ponechá tú, ktorej názov znie ako denné menu: Denní, Polední, Obědové, Lunch, Daily, alebo dnešný deň v týždni. |
+| `html` | všetko ostatné | Ak stránka vypisuje menu po dňoch (Pondělí, Úterý…), vezme dnešný deň. Inak blok pod nadpisom „Denní / Polední menu / Lunch“. Ak nič nenájde, skúsi vložený iframe a odkaz „Denní menu“. Obrázky s menu ukáže priamo. |
 
-Denné menu sa zobrazuje predvolene, celé menu sa zapne prepínačom *Zobraziť celé menu*.
-Keď parser na konkrétnej stránke netrafí, najrýchlejšia oprava je doplniť `selector`.
-Stránky, ktoré menu vykresľujú až JavaScriptom, alebo ho majú len ako obrázok/PDF, zatiaľ nečíta. Pri nich ukáže aspoň odkaz.
+### Keď sa denné menu nenájde
+
+Karta reštaurácie vtedy ukáže, ktoré sekcie na stránke našla. Dá sa to opraviť v `restaurants.yaml`:
+
+```yaml
+  - name: Padagali
+    url: https://padagali.choiceqr.com/section:menu
+    daily_section: "Lunch"        # text z názvu sekcie alebo nadpisu denného menu
+```
+
+- `daily_section` vyberie sekciu alebo nadpis, ktorý ten text obsahuje. Na veľkosti písmen a diakritike nezáleží.
+- `selector` vyberie časť stránky podľa CSS selektora, napríklad `"#denni-menu"`.
+
+Na karte je aj odkaz *Stiahnuť HTML stránky na kontrolu*. Stiahne stránku presne tak, ako ju vidí server. Tento súbor sa hodí na opravu parsera.
+Stránky, ktoré menu vykresľujú až JavaScriptom alebo ho majú len v PDF, zatiaľ nečíta.
 
 ## Vývoj
 

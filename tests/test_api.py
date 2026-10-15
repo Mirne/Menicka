@@ -17,7 +17,7 @@ def client(tmp_path, monkeypatch):
     importlib.reload(app.db)
     main = importlib.reload(app.main)
 
-    async def fake_fetch(url, kind="auto", selector=None, today=None, client=None):
+    async def fake_fetch(url, kind="auto", selector=None, today=None, client=None, daily_section=None):
         return MenuResult(sections=[MenuSection("Denní menu", [MenuItem("Jídlo", 150)], True)], source_url=url)
 
     monkeypatch.setattr(main, "fetch_menu", fake_fetch)
@@ -57,3 +57,35 @@ def test_add_and_delete_restaurant(client):
 
 def test_index_served(client):
     assert "Menučka" in client.get("/").text
+
+
+def test_source_download(client, monkeypatch):
+    import app.main as main
+
+    async def fake_html(url, client=None):
+        return "<html>raw</html>"
+
+    monkeypatch.setattr(main, "fetch_html", fake_html)
+    rid = client.get("/api/restaurants").json()[0]["id"]
+    r = client.get(f"/api/restaurants/{rid}/source")
+    assert r.text == "<html>raw</html>"
+    assert 'filename="a.html"' in r.headers["content-disposition"]
+
+
+def test_daily_section_saved(client):
+    r = client.post("/api/restaurants", json={"name": "E", "url": "https://e.cz", "daily_section": "Lunch"}).json()
+    assert r["daily_section"] == "Lunch"
+
+
+def test_old_database_gets_new_column(tmp_path, monkeypatch):
+    import sqlite3
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    con = sqlite3.connect(tmp_path / "menicka.db")
+    con.execute("CREATE TABLE restaurants (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, "
+                "url TEXT NOT NULL UNIQUE, kind TEXT NOT NULL DEFAULT 'auto', selector TEXT, "
+                "created_at TEXT NOT NULL DEFAULT (datetime('now')))")
+    con.commit(); con.close()
+    import app.db
+    db = importlib.reload(app.db)
+    db.init()
+    assert db.upsert_restaurant("X", "https://x.cz", daily_section="Menu dne")["daily_section"] == "Menu dne"

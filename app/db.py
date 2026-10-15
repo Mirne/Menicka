@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS restaurants (
     url TEXT NOT NULL UNIQUE,
     kind TEXT NOT NULL DEFAULT 'auto',
     selector TEXT,
+    daily_section TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE TABLE IF NOT EXISTS votes (
@@ -47,6 +48,9 @@ def connect():
 def init() -> None:
     with connect() as c:
         c.executescript(SCHEMA)
+        cols = {r["name"] for r in c.execute("PRAGMA table_info(restaurants)")}
+        if "daily_section" not in cols:  # databases created before this column existed
+            c.execute("ALTER TABLE restaurants ADD COLUMN daily_section TEXT")
 
 
 def list_restaurants() -> list[dict]:
@@ -60,13 +64,14 @@ def get_restaurant(rid: int) -> dict | None:
         return dict(r) if r else None
 
 
-def upsert_restaurant(name: str, url: str, kind: str = "auto", selector: str | None = None) -> dict:
+def upsert_restaurant(name: str, url: str, kind: str = "auto", selector: str | None = None,
+                      daily_section: str | None = None) -> dict:
     with connect() as c:
         c.execute(
-            """INSERT INTO restaurants (name, url, kind, selector) VALUES (?, ?, ?, ?)
+            """INSERT INTO restaurants (name, url, kind, selector, daily_section) VALUES (?, ?, ?, ?, ?)
                ON CONFLICT(url) DO UPDATE SET name = excluded.name, kind = excluded.kind,
-               selector = excluded.selector""",
-            (name, url, kind, selector or None),
+               selector = excluded.selector, daily_section = excluded.daily_section""",
+            (name, url, kind, selector or None, daily_section or None),
         )
         return dict(c.execute("SELECT * FROM restaurants WHERE url = ?", (url,)).fetchone())
 

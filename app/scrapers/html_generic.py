@@ -4,7 +4,7 @@ Strategy, in order:
 1. If a CSS selector is configured for the restaurant, use only that part.
 2. If the page lists the week day by day (Pondělí, Úterý, ...), take today's block.
 3. Otherwise take the block after a "Denní menu / Polední menu / Lunch" heading.
-4. Otherwise fall back to every line on the page that carries a price.
+4. Otherwise report that no daily menu was found (the rest of the menu is not wanted).
 Lines with a price become dishes; short known headings (Polévka, Hlavní jídla...) start sections.
 """
 from __future__ import annotations
@@ -60,9 +60,11 @@ def today_block(lines: list[str], today: date) -> list[str] | None:
     return []  # day-by-day listing, but nothing for today (e.g. weekend)
 
 
-def daily_heading_block(lines: list[str]) -> list[str] | None:
+def daily_heading_block(lines: list[str], pattern: str | None = None) -> list[str] | None:
+    want = strip_accents(pattern.strip()) if pattern and pattern.strip() else None
     for i, l in enumerate(lines):
-        if len(l) <= 60 and looks_daily(l) and find_price(l)[0] is None:
+        is_head = (want in strip_accents(l)) if want else looks_daily(l)
+        if len(l) <= 60 and is_head and find_price(l)[0] is None:
             block, misses, seen_price = [l], 0, False
             for nxt in lines[i + 1: i + 1 + MAX_BLOCK_LINES]:
                 has_price = find_price(nxt)[0] is not None
@@ -128,9 +130,36 @@ def lines_to_sections(lines: list[str], default_name: str) -> list[MenuSection]:
     return [s for s in sections if any(i.price is not None for i in s.items) or len(s.items) <= 8]
 
 
+IMAGE_RE = re.compile(r"\.(jpe?g|png|webp)(\?|$)", re.IGNORECASE)
+NOT_MENU_IMAGE = re.compile(r"logo|icon|favicon|sprite|banner|avatar", re.IGNORECASE)
+
+
+def menu_images(soup: BeautifulSoup, base_url: str) -> list[str]:
+    """Pictures whose file name, alt text or link mention a (daily) menu."""
+    out: list[str] = []
+    for img in soup.find_all("img"):
+        src = img.get("src") or img.get("data-src") or ""
+        label = strip_accents(" ".join([src, img.get("alt") or "", img.get("title") or ""]))
+        parent = img.find_parent("a")
+        if parent is not None and parent.get("href"):
+            label += " " + strip_accents(parent["href"] + " " + clean_space(parent.get_text()))
+        if src and MENU_LINK_RE.search(label) and not NOT_MENU_IMAGE.search(src):
+            out.append(urljoin(base_url, src))
+    for a in soup.find_all("a", href=True):
+        href = urljoin(base_url, a["href"])
+        if IMAGE_RE.search(href) and MENU_LINK_RE.search(strip_accents(href + " " + a.get_text())):
+            out.append(href)
+    return list(dict.fromkeys(out))[:4]
+
+
 def menu_links(soup: BeautifulSoup, base_url: str) -> list[str]:
     host = urlparse(base_url).netloc
     out: list[str] = []
+    # Embedded menus (menicka.cz widgets, Google Docs, ...) come first, from any host.
+    for fr in soup.find_all("iframe", src=True):
+        src = urljoin(base_url, fr["src"])
+        if src.startswith("http") and not re.search(r"youtube|google\.com/maps|facebook|instagram", src):
+            out.append(src)
     for a in soup.find_all("a", href=True):
         href = urljoin(base_url, a["href"])
         label = clean_space(a.get_text()) + " " + href
@@ -140,42 +169,46 @@ def menu_links(soup: BeautifulSoup, base_url: str) -> list[str]:
         if urlparse(href).netloc == host or is_file:
             if href.split("#")[0] != base_url.split("#")[0] and href not in out:
                 out.append(href)
-    return out[:8]
+    return list(dict.fromkeys(out))[:8]
 
 
-def parse_html(html: str, url: str, selector: str | None = None, today: date | None = None) -> MenuResult:
+def parse_html(html: str, url: str, selector: str | None = None, today: date | None = None,
+               pattern: str | None = None) -> MenuResult:
     today = today or date.today()
     soup = BeautifulSoup(html, "lxml")
     links = menu_links(soup, url)
+    images = menu_images(soup, url)
     root = soup
     if selector:
         picked = soup.select(selector)
         if not picked:
-            return MenuResult(source_url=url, links=links, error=f"Selektor '{selector}' na stránke nič nenašiel.")
+            return MenuResult(source_url=url, links=links, images=images,
+                              error=f"Selektor '{selector}' na stránke nič nenašiel.")
         root = BeautifulSoup("".join(str(p) for p in picked), "lxml")
     lines = page_lines(root)
 
     if selector:
-        block, title, daily = lines, "Denné menu", True
+        block, title = lines, "Denné menu"
     else:
         block = today_block(lines, today)
-        title, daily = "Denné menu", True
+        title = "Denné menu"
         if block == []:
-            return MenuResult(source_url=url, links=links, error="Na dnešný deň stránka menu neuvádza.")
+            return MenuResult(source_url=url, links=links, images=images,
+                              error="Na dnešný deň stránka menu neuvádza.")
         if block:
             title = block[0]
             block = block[1:]
         else:
-            block = daily_heading_block(lines)
-            if block:
-                title, block = block[0], block[1:]
-            else:
-                block = [l for l in lines if find_price(l)[0] is not None]
-                title, daily = "Položky s cenou nájdené na stránke", False
+            block = daily_heading_block(lines, pattern)
+            if not block:
+                # Only the daily menu matters: no guessing from the whole page.
+                return MenuResult(source_url=url, links=links, images=images,
+                                  error="Na stránke som nenašiel denné menu.")
+            title, block = block[0], block[1:]
 
     sections = lines_to_sections(block, title)
     for s in sections:
-        s.is_daily = daily
+        s.is_daily = True
     if not any(s.items for s in sections):
-        return MenuResult(source_url=url, links=links, error="Na stránke som nenašiel menu.")
-    return MenuResult(sections=sections, source_url=url, links=links)
+        return MenuResult(source_url=url, links=links, images=images, error="Na stránke som nenašiel denné menu.")
+    return MenuResult(sections=sections, source_url=url, links=links, images=images)

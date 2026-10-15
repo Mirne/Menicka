@@ -25,9 +25,6 @@
       <div id="tally" class="tally"></div>
     </section>
 
-    <div class="toolbar">
-      <label class="check"><input type="checkbox" id="show-all"> Zobraziť celé menu (nielen denné)</label>
-    </div>
     <section id="menus" class="menus"><p class="muted">Načítavam menu…</p></section>
 
     <details class="panel" id="admin">
@@ -39,6 +36,7 @@
         <label>Typ<select id="add-kind">
           <option value="auto">auto</option><option value="choiceqr">ChoiceQR</option><option value="html">webstránka</option>
         </select></label>
+        <label>Názov sekcie denného menu <span class="muted">(voliteľné)</span><input id="add-daily" maxlength="100" placeholder="Lunch menu"></label>
         <label>CSS selektor <span class="muted">(voliteľné)</span><input id="add-selector" maxlength="200" placeholder="#denni-menu"></label>
         <button type="submit">Pridať</button>
       </form>

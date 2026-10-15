@@ -11,12 +11,14 @@ from zoneinfo import ZoneInfo
 
 import yaml
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
 
 from . import db
-from .scrapers import KINDS, detect_kind, fetch_menu
+import httpx
+
+from .scrapers import KINDS, detect_kind, fetch_html, fetch_menu
 
 logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
 log = logging.getLogger("menicka")
@@ -45,11 +47,12 @@ def seed_restaurants() -> None:
         return
     data = yaml.safe_load(RESTAURANTS_FILE.read_text(encoding="utf-8")) or {}
     for r in data.get("restaurants", []):
-        db.upsert_restaurant(r["name"], r["url"], r.get("kind", "auto"), r.get("selector"))
+        db.upsert_restaurant(r["name"], r["url"], r.get("kind", "auto"), r.get("selector"), r.get("daily_section"))
 
 
 async def refresh_one(r: dict) -> dict:
-    result = await fetch_menu(r["url"], r.get("kind") or "auto", r.get("selector"), today=now().date())
+    result = await fetch_menu(r["url"], r.get("kind") or "auto", r.get("selector"), today=now().date(),
+                              daily_section=r.get("daily_section"))
     entry = {"fetched_at": now().isoformat(timespec="seconds"), "day": today(), "result": result.to_dict()}
     _cache[r["id"]] = entry
     return entry
@@ -89,6 +92,7 @@ class RestaurantIn(BaseModel):
     url: str = Field(min_length=8, max_length=500)
     kind: str = "auto"
     selector: str | None = Field(default=None, max_length=200)
+    daily_section: str | None = Field(default=None, max_length=100)
 
     @field_validator("url")
     @classmethod
@@ -128,7 +132,8 @@ def get_restaurants() -> list[dict]:
 
 @app.post("/api/restaurants", status_code=201)
 async def add_restaurant(body: RestaurantIn) -> dict:
-    r = db.upsert_restaurant(body.name.strip(), body.url, body.kind, (body.selector or "").strip() or None)
+    r = db.upsert_restaurant(body.name.strip(), body.url, body.kind, (body.selector or "").strip() or None,
+                             (body.daily_section or "").strip() or None)
     await refresh_one(r)
     return restaurant_view(r)
 
@@ -138,6 +143,21 @@ def remove_restaurant(rid: int) -> None:
     if not db.delete_restaurant(rid):
         raise HTTPException(404, "Reštaurácia neexistuje")
     _cache.pop(rid, None)
+
+
+@app.get("/api/restaurants/{rid}/source")
+async def restaurant_source(rid: int) -> Response:
+    """The page HTML exactly as the server downloads it, to debug a parser."""
+    r = db.get_restaurant(rid)
+    if not r:
+        raise HTTPException(404, "Reštaurácia neexistuje")
+    try:
+        html = await fetch_html(r["url"])
+    except httpx.HTTPError as e:
+        raise HTTPException(502, f"Stránku sa nepodarilo načítať: {e}")
+    safe = "".join(ch if ch.isalnum() else "-" for ch in r["name"].lower()).strip("-") or "restauracia"
+    return Response(html, media_type="text/html; charset=utf-8",
+                    headers={"Content-Disposition": f'attachment; filename="{safe}.html"'})
 
 
 @app.get("/api/menus")

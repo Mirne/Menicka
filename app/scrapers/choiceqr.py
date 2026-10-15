@@ -94,7 +94,7 @@ def _ref_name(d: dict, by_id: dict[str, str]) -> str:
     return ""
 
 
-def extract_from_json(data: Any, today: date | None = None) -> list[MenuSection]:
+def extract_from_json(data: Any, today: date | None = None, pattern: str | None = None) -> list[MenuSection]:
     # 1) every named object that has an id -> possible section name for references
     by_id: dict[str, str] = {}
 
@@ -156,11 +156,11 @@ def extract_from_json(data: Any, today: date | None = None) -> list[MenuSection]
         )
 
     result = list(sections.values())
-    mark_daily(result, today)
+    mark_daily(result, today, pattern)
     return result
 
 
-def parse_choiceqr(html: str, url: str, today: date | None = None) -> MenuResult:
+def parse_choiceqr(html: str, url: str, today: date | None = None, pattern: str | None = None) -> MenuResult:
     soup = BeautifulSoup(html, "lxml")
     payloads: list[Any] = []
     tag = soup.find("script", id="__NEXT_DATA__")
@@ -179,7 +179,7 @@ def parse_choiceqr(html: str, url: str, today: date | None = None) -> MenuResult
             continue
 
     for data in payloads:
-        sections = extract_from_json(data, today)
+        sections = extract_from_json(data, today, pattern)
         if sections:
             return MenuResult(sections=sections, source_url=url)
     return MenuResult(source_url=url, error="Na stránke ChoiceQR som nenašiel dáta menu.")

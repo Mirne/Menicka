@@ -28,6 +28,10 @@ class MenuResult:
     source_url: str = ""
     # Links to PDFs/images/subpages that probably hold the menu, shown as a fallback.
     links: list[str] = field(default_factory=list)
+    # Images that look like a menu (many places post the daily menu as a photo).
+    images: list[str] = field(default_factory=list)
+    # Names of every section found, kept for diagnostics when no daily one matched.
+    found_sections: list[str] = field(default_factory=list)
     error: str | None = None
 
     @property
@@ -91,19 +95,23 @@ def looks_daily(name: str) -> bool:
     return bool(_DAILY_RE.search(strip_accents(name)))
 
 
-def mark_daily(sections: list[MenuSection], today: date | None = None) -> None:
+def mark_daily(sections: list[MenuSection], today: date | None = None, pattern: str | None = None) -> None:
     """Flag the sections that form today's lunch menu.
 
-    A section named after a weekday counts only on that weekday. Otherwise a
-    section counts when its name sounds like a daily/lunch menu.
+    With `pattern` (set per restaurant) a section must contain that text,
+    ignoring case and accents. Without it, the name must sound like a
+    daily/lunch menu or be a weekday. A section named after a weekday counts
+    only on that weekday.
     """
     today = today or date.today()
+    want = strip_accents(pattern.strip()) if pattern and pattern.strip() else None
     for s in sections:
         wd = weekday_in(s.name)
-        if wd is not None:
-            s.is_daily = wd == today.weekday()
+        if want is not None:
+            ok = want in strip_accents(s.name)
         else:
-            s.is_daily = looks_daily(s.name)
+            ok = wd is not None or looks_daily(s.name)
+        s.is_daily = ok and (wd is None or wd == today.weekday())
 
 
 # 129 Kč | 129,- | 129.00 Kč | 129 CZK | 12,50 € ...
