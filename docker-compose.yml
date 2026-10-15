@@ -2,7 +2,8 @@ services:
   menicka:
     build: .
     ports:
-      - "${PORT:-8000}:8000"
+      # host port: ./start.sh picks a free one and saves it to .env
+      - "${PORT:-47823}:8000"
     environment:
       TZ: Europe/Prague
       REFRESH_MINUTES: "30"

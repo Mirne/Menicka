@@ -9,11 +9,17 @@ Stránka, ktorá zbiera denné menu z reštaurácií, ktoré zadáte, a ukazuje,
 ## Spustenie
 
 ```bash
-docker compose up --build
+./start.sh
 ```
 
-Potom otvor <http://localhost:8000>. Iný port: `PORT=9000 docker compose up --build`.
-Dáta (reštaurácie pridané na stránke, hlasy) sú v Docker volume `menicka-data`.
+Skript zostaví image, nájde voľný port od 47823 vyššie a vypíše adresu, napríklad <http://localhost:47823>.
+Zvolený port uloží do `.env`, takže `docker compose up`, `restart` aj `down` potom používajú ten istý.
+Konkrétny port: `PORT=51234 ./start.sh`.
+
+Bez skriptu, napríklad na Windows bez bashu: `docker compose up --build`, s portom `PORT=51234 docker compose up --build`.
+
+Logy: `docker compose logs -f`. Zastavenie: `docker compose down`.
+Dáta, teda reštaurácie pridané na stránke a hlasy, sú v Docker volume `menicka-data`.
 
 ## Pridanie reštaurácie
 
