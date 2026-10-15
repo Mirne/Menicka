@@ -183,6 +183,10 @@ def daily_candidates(data: Any, base_url: str, pattern: str | None = None) -> tu
             n = _name(node)
             if n and not _is_item(node) and ((want in strip_accents(n)) if want else looks_daily(n)):
                 names.append(n)
+                # ChoiceQR section URLs look like "section:menu"; guess one from the name too.
+                slug = re.sub(r"[^a-z0-9]+", "-", strip_accents(n)).strip("-")
+                if slug:
+                    urls.append(f"{origin}/section:{slug}")
                 for k in SLUG_KEYS:
                     v = node.get(k)
                     if isinstance(v, str) and v.strip():

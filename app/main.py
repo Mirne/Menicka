@@ -163,9 +163,11 @@ async def restaurant_source(rid: int) -> Response:
 @app.get("/api/menus")
 async def get_menus() -> list[dict]:
     rs = db.list_restaurants()
-    stale = [r for r in rs if r["id"] not in _cache or _cache[r["id"]]["day"] != today()]
-    if stale:
-        await asyncio.gather(*(refresh_one(r) for r in stale))
+    if any(r["id"] not in _cache or _cache[r["id"]]["day"] != today() for r in rs):
+        # Wait for a refresh already running instead of fetching (and OCR-ing) twice.
+        async with _lock:
+            stale = [r for r in rs if r["id"] not in _cache or _cache[r["id"]]["day"] != today()]
+            await asyncio.gather(*(refresh_one(r) for r in stale))
     return [{"restaurant": restaurant_view(r), **_cache[r["id"]]} for r in rs if r["id"] in _cache]
 
 

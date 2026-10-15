@@ -258,7 +258,9 @@ def test_everest_like_single_day_page_without_headings():
     assert [i.price for s in r.sections for i in s.items if i.price] == [145.0, 139.0]
 
 
-def test_everest_like_menu_as_image():
+def test_everest_like_menu_as_image(monkeypatch):
+    from app.scrapers import ocr
+    monkeypatch.setattr(ocr, "available", lambda: False)
     page = """<html><body><header><img src="/logo.png"></header><main><h1>Denní menu</h1>
     <img src="/wp-content/uploads/2026/10/IMG_4821.jpg" width="1080" height="1350"></main></body></html>"""
     r = everest(page)
@@ -313,3 +315,78 @@ def test_choiceqr_reports_lunch_menu_it_could_not_open():
     r = run_fetch({base: next_data(main)}, base)
     assert r.error == "Denné menu som nerozoznal. Na stránke je aj: Lunch menu."
     assert r.found_sections == ["Předkrmy", "Tikka specials"]
+
+
+
+# --- Everest's real weekly menu picture (week 12.-16.10.2026), read by OCR.
+
+import pathlib
+import shutil
+
+import pytest
+
+FIXTURES = pathlib.Path(__file__).parent / "fixtures"
+needs_ocr = pytest.mark.skipif(shutil.which("tesseract") is None, reason="tesseract not installed")
+
+
+def run_fetch_bytes(pages: dict, url: str, today: date):
+    def handler(req: httpx.Request) -> httpx.Response:
+        body = pages.get(str(req.url))
+        if body is None:
+            return httpx.Response(404)
+        return httpx.Response(200, content=body if isinstance(body, bytes) else body.encode())
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as c:
+            return await fetch_menu(url, today=today, client=c)
+
+    return asyncio.run(run())
+
+
+EVEREST_DAILY_PAGE = """<html><body><header><img src="/logo.png" width="80"></header><main>
+<h1>Denní menu</h1><img src="/up/promo.jpg"><img src="/up/menu.webp"></main>
+<footer>Veveří 61, Brno</footer></body></html>"""
+
+
+def everest_real(today: date):
+    return run_fetch_bytes({
+        "https://www.example.cz/": EVEREST_HOME,
+        "https://www.example.cz/denni-menu/": EVEREST_DAILY_PAGE,
+        "https://www.example.cz/jidelni-listek/": FULL_LISTEK,
+        "https://www.example.cz/up/promo.jpg": (FIXTURES / "everest-promo.jpg").read_bytes(),
+        "https://www.example.cz/up/menu.webp": (FIXTURES / "everest-menu-2026-10-12.webp").read_bytes(),
+    }, "https://www.example.cz/", today)
+
+
+@needs_ocr
+def test_everest_real_picture_thursday():
+    r = everest_real(THURSDAY)
+    assert r.error is None, r.error
+    assert r.from_image and r.images == ["https://www.example.cz/up/menu.webp"]
+    [sec] = r.sections
+    assert sec.name == "Čtvrtek/ Thursday"
+    dishes = [(i.name, i.price) for i in sec.items if i.price]
+    assert dishes[0] == ("Dal Adrak Soup (Nepálská čočková a zázvorová polévka)", 27.0)
+    assert [p for _, p in dishes] == [27, 45, 145, 145, 145, 145, 179, 199, 225, 145]
+    assert dishes[3][0].startswith("2 Chicken Korma")
+    assert not any("Poutník" in i.name or "Wifi" in i.name for i in sec.items)
+
+
+@needs_ocr
+@pytest.mark.parametrize("day,first,title", [
+    (12, "Tomato Soup", "Pondělí / Monday"), (13, "Garlic Soup", "Úterý/Tuesday"),
+    (14, "Chicken Soup", "Středa/Wednesday"), (16, "Tomato Soup", "Pátek / Friday")])
+def test_everest_real_picture_other_days(day, first, title):
+    r = everest_real(date(2026, 10, day))
+    assert r.error is None, r.error
+    assert r.sections[0].name == title
+    assert r.sections[0].items[0].name.startswith(first)
+    # the drinks list and notes after Friday are not part of the day
+    assert not any("Poutník" in i.name or "Wifi" in i.name or "Heslo" in i.name for i in r.sections[0].items)
+
+
+@needs_ocr
+def test_everest_real_picture_next_week_is_stale():
+    r = everest_real(date(2026, 10, 20))
+    assert r.error == "Menu na stránke je pre týždeň 12.10.–16.10., nie pre dnešok."
+    assert r.sections == []

@@ -74,8 +74,10 @@ function renderMenus() {
     const found = m.error && m.found_sections.length
       ? `<p class="muted">Sekcie na stránke: ${m.found_sections.map(esc).join(", ")}.<br>
          Ktorá je denné menu, nastavíš v <code>restaurants.yaml</code> cez <code>daily_section</code>.</p>` : "";
-    const images = !m.sections.length && m.images.length
-      ? `<div class="imgs">${m.images.map((src) => `<a href="${esc(src)}" target="_blank" rel="noopener"><img src="${esc(src)}" alt="Menu ${esc(r.name)}" loading="lazy"></a>`).join("")}</div>` : "";
+    const images = m.from_image && m.images.length
+      ? `<a class="muted small-link" href="${esc(m.images[0])}" target="_blank" rel="noopener">Prečítané z obrázka menu, môžu tam byť drobné preklepy</a>`
+      : !m.sections.length && m.images.length
+        ? `<div class="links"><span class="muted">Obrázky s menu:</span>${m.images.map((src, n) => `<a href="${esc(src)}" target="_blank" rel="noopener">Obrázok ${n + 1}</a>`).join("")}</div>` : "";
     const links = !m.sections.length && m.links.length
       ? `<div class="links"><span class="muted">Možno je menu tu:</span>${m.links.map((l) => `<a href="${esc(l)}" target="_blank" rel="noopener">${esc(l)}</a>`).join("")}</div>` : "";
     const debug = m.error
@@ -84,8 +86,7 @@ function renderMenus() {
     return `<article class="card">
       <header><h3><a href="${esc(m.source_url || r.url)}" target="_blank" rel="noopener">${esc(r.name)}</a></h3>
         ${n ? `<span class="badge">${n} ${n === 1 ? "ide" : "idú"}</span>` : ""}</header>
-      ${m.error && !m.images.length ? `<div class="error">${esc(m.error)}</div>` : ""}
-      ${m.error && m.images.length ? `<p class="muted">Denné menu je na obrázku:</p>` : ""}
+      ${m.error ? `<div class="error">${esc(m.error)}</div>` : ""}
       ${found}${body}${images}${links}${debug}
       <footer><span class="muted">stiahnuté ${fmtTime(fetched_at)}</span>
         <button class="small" data-go="${r.id}">Idem sem</button></footer>

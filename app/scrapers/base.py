@@ -36,6 +36,8 @@ class MenuResult:
     daily_links: list[str] = field(default_factory=list)
     # ChoiceQR: names of other menus/sections that sound like a lunch menu (diagnostics).
     other_menus: list[str] = field(default_factory=list)
+    # True when the menu was read from a picture by OCR (may contain small misreads).
+    from_image: bool = False
     error: str | None = None
 
     @property
@@ -77,6 +79,11 @@ def weekday_of(text: str) -> int | None:
             if t.startswith(n) and (len(t) == len(n) or not t[len(n)].isalpha()):
                 return idx
     return None
+
+
+def weekdays_in(text: str) -> set[int]:
+    t = strip_accents(text)
+    return {idx for idx, names in enumerate(WEEKDAYS) for n in names if re.search(rf"\b{n}\b", t)}
 
 
 def weekday_in(text: str) -> int | None:
@@ -176,6 +183,10 @@ def day_heading(text: str, today: date) -> tuple[object, bool] | None:
         return None
     t = strip_accents(clean_space(text))
     d = date_in(t, today)
+    if weekday_of(t) is None and d is None and not re.search(r"\d", t) and len(weekdays_in(t)) == 1:
+        # "Wifi Upstairs Pondělí / Monday Wifi Downstairs": one weekday, no numbers
+        wd = weekdays_in(t).pop()
+        return wd, wd == today.weekday()
     if weekday_of(t) is None:
         if d is None:
             return None
@@ -187,3 +198,29 @@ def day_heading(text: str, today: date) -> tuple[object, bool] | None:
         return d, d == today
     wd = weekday_of(t)
     return wd, wd == today.weekday()
+
+
+RANGE_RE = re.compile(
+    r"(?<!\d)(\d{1,2})\.\s?(\d{1,2})\.\s?(\d{4})?\s*[-–—]\s*(\d{1,2})\.\s?(\d{1,2})\.\s?(\d{4})?"
+)
+
+
+def stale_week(lines: list[str], today: date) -> str | None:
+    """If the text says which week it is for ("12.10.2026-16.10.2026") and today is not
+    in it, return a message. Ranges longer than a week (validity notes) are ignored."""
+    ranges = []
+    for line in lines:
+        for m in RANGE_RE.finditer(line):
+            d1, m1, y1, d2, m2, y2 = m.groups()
+            y2 = int(y2 or y1 or today.year)
+            y1 = int(y1 or y2)
+            try:
+                start, end = date(y1, int(m1), int(d1)), date(y2, int(m2), int(d2))
+            except ValueError:
+                continue
+            if 0 <= (end - start).days <= 7:
+                ranges.append((start, end))
+    if not ranges or any(s <= today <= e for s, e in ranges):
+        return None
+    s, e = ranges[0]
+    return f"Menu na stránke je pre týždeň {s.day}.{s.month}.–{e.day}.{e.month}., nie pre dnešok."

@@ -6,6 +6,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     RESTAURANTS_FILE=/app/restaurants.yaml \
     TZ=Europe/Prague
 
+# Tesseract reads menus that restaurants post as pictures (Czech + English).
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-ces tesseract-ocr-eng \
+ && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

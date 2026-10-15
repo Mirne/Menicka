@@ -1,6 +1,7 @@
 """Fetch a restaurant page and pick the right parser. Only today's daily menu is returned."""
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import date
 
@@ -8,7 +9,8 @@ import httpx
 
 from .base import MenuResult
 from .choiceqr import is_choiceqr, parse_choiceqr
-from .html_generic import parse_html
+from . import ocr
+from .html_generic import NotFound, parse_html, sections_from_lines
 
 log = logging.getLogger(__name__)
 
@@ -70,6 +72,37 @@ async def _parse(client: httpx.AsyncClient, url: str, kind: str, selector: str |
     return only_daily(parse_html(html, url, selector, today, pattern, daily_page))
 
 
+MAX_IMAGE_BYTES = 15 * 1024 * 1024
+
+
+async def read_images(client: httpx.AsyncClient, failed: MenuResult, today: date | None,
+                      pattern: str | None) -> MenuResult | None:
+    """OCR the menu pictures of a page and keep today's part. None if OCR is not available."""
+    if not failed.images or not ocr.available():
+        return None
+    reason = None
+    for src in failed.images[:4]:
+        try:
+            r = await client.get(src)
+            r.raise_for_status()
+        except httpx.HTTPError:
+            continue
+        if len(r.content) > MAX_IMAGE_BYTES:
+            continue
+        lines = await asyncio.to_thread(ocr.lines_from_image, r.content)
+        try:
+            sections = sections_from_lines(lines, today or date.today(), pattern, relaxed=True)
+        except NotFound as e:
+            # A picture with no menu at all (a promo poster) says nothing; a stale week does.
+            if "týždeň" in str(e) or "dnešný" in str(e):
+                reason = reason or str(e)
+            continue
+        return MenuResult(sections=sections, source_url=failed.source_url, images=[src],
+                          links=failed.links, from_image=True)
+    return MenuResult(source_url=failed.source_url, images=failed.images, links=failed.links,
+                      error=reason or "Na obrázkoch som denné menu neprečítal.")
+
+
 async def fetch_menu(url: str, kind: str = "auto", selector: str | None = None,
                      today: date | None = None, client: httpx.AsyncClient | None = None,
                      daily_section: str | None = None) -> MenuResult:
@@ -102,8 +135,9 @@ async def fetch_menu(url: str, kind: str = "auto", selector: str | None = None,
             best_failure.images = best_failure.images or result.images
             best_failure.links = list(dict.fromkeys(result.links + best_failure.links))
             best_failure.found_sections = best_failure.found_sections or result.found_sections
-            return best_failure
-        return result
+            result = best_failure
+        # The menu may be a picture (often the whole week in one image): read it.
+        return await read_images(client, result, today, daily_section) or result
     except httpx.HTTPError as e:
         log.warning("fetch %s failed: %s", url, e)
         return MenuResult(source_url=url, error=f"Stránku sa nepodarilo načítať: {type(e).__name__}: {e}")
