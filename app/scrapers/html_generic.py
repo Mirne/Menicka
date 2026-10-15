@@ -18,6 +18,8 @@ from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup
 
+from . import messages as msg
+
 from .base import (
     MenuItem,
     MenuResult,
@@ -390,19 +392,19 @@ def sections_from_lines(lines: list[str], today: date, pattern: str | None = Non
     if stale and block is not None:
         raise NotFound(stale)
     if block == []:
-        raise NotFound("Na dnešný deň stránka menu neuvádza.")
+        raise NotFound(msg.NOTHING_TODAY)
     if block:
         title, block = clean_title(block[0]), cut_at_stop(block[1:])
     else:
         block = daily_heading_block(lines, pattern, relaxed)
         if not block:
-            raise NotFound("Na stránke som nenašiel denné menu.")
+            raise NotFound(msg.NO_DAILY_MENU)
         title, block = block[0], cut_at_stop(block[1:])
     sections = lines_to_sections(block, title, relaxed)
     for sec in sections:
         sec.is_daily = True
     if not any(sec.items for sec in sections):
-        raise NotFound("Na stránke som nenašiel denné menu.")
+        raise NotFound(msg.NO_DAILY_MENU)
     prices = menu_price_table(lines)
     for sec in sections:
         for item in sec.items:
@@ -424,14 +426,14 @@ def daily_document(lines: list[str], today: date, pattern: str | None = None,
     try:
         return sections_from_lines(lines, today, pattern, True, also)
     except NotFound as e:
-        if str(e) != "Na stránke som nenašiel denné menu.":
+        if str(e) != msg.NO_DAILY_MENU:
             raise
     block = cut_at_stop([l for l in lines if find_price(l, True)[0] is not None])
-    sections = lines_to_sections(block, "Denné menu", True) if block else []
+    sections = lines_to_sections(block, msg.SECTION_DAILY, True) if block else []
     for sec in sections:
         sec.is_daily = True
     if not any(sec.items for sec in sections):
-        raise NotFound("Na stránke som nenašiel denné menu.")
+        raise NotFound(msg.NO_DAILY_MENU)
     return sections
 
 
@@ -464,7 +466,7 @@ def parse_html(html: str, url: str, selector: str | None = None, today: date | N
     if selector:
         picked = soup.select(selector)
         if not picked:
-            return MenuResult(**base, images=images, error=f"Selektor '{selector}' na stránke nič nenašiel.")
+            return MenuResult(**base, images=images, error=msg.selector_empty(selector))
         root = BeautifulSoup("".join(str(p) for p in picked), "lxml")
     elif (frag := fragment_root(soup, url)) is not None:
         root, daily_page = frag, True
@@ -478,14 +480,14 @@ def parse_html(html: str, url: str, selector: str | None = None, today: date | N
     almost_empty = sum(len(l) for l in lines) < min_text and not any(find_price(l, relaxed)[0] for l in lines)
     if almost_empty and not selector and not images:
         return MenuResult(**base, images=images,
-                          error="Stránka nemá skoro žiadny text. Menu sa asi načítava až JavaScriptom.")
+                          error=msg.ALMOST_EMPTY)
 
     if selector:
-        sections = lines_to_sections(lines, "Denné menu", relaxed)
+        sections = lines_to_sections(lines, msg.SECTION_DAILY, relaxed)
         for sec in sections:
             sec.is_daily = True
         if not any(sec.items for sec in sections):
-            return MenuResult(**base, images=images, error="Vo vybranej časti stránky som nenašiel menu.")
+            return MenuResult(**base, images=images, error=msg.NOTHING_IN_SELECTION)
         return MenuResult(**base, sections=sections, images=images)
     try:
         if daily_page:
@@ -494,11 +496,11 @@ def parse_html(html: str, url: str, selector: str | None = None, today: date | N
             sections = sections_from_lines(lines, today, pattern, relaxed, also)
         return MenuResult(**base, sections=sections, images=images)
     except NotFound as e:
-        if not daily_page or str(e) != "Na stránke som nenašiel denné menu.":
+        if not daily_page or str(e) != msg.NO_DAILY_MENU:
             return MenuResult(**base, images=images, error=str(e))
     if images:
-        return MenuResult(**base, images=images, error="Denné menu je na obrázku.")
+        return MenuResult(**base, images=images, error=msg.MENU_IS_PICTURE)
     # No prices at all: show the page text itself rather than nothing.
     text = [MenuItem(name=l) for l in lines
             if 3 <= len(l) <= 200 and not (len(l) <= 60 and looks_daily(l))][:MAX_BLOCK_LINES]
-    return MenuResult(**base, sections=[MenuSection("Text stránky s denným menu", text, True)], images=images)
+    return MenuResult(**base, sections=[MenuSection(msg.SECTION_PAGE_TEXT, text, True)], images=images)

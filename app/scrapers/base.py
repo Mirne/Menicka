@@ -223,4 +223,5 @@ def stale_week(lines: list[str], today: date) -> str | None:
     if not ranges or any(s <= today <= e for s, e in ranges):
         return None
     s, e = ranges[0]
-    return f"Menu na stránke je pre týždeň {s.day}.{s.month}.–{e.day}.{e.month}., nie pre dnešok."
+    from .messages import stale_week as stale_message
+    return stale_message(s, e)

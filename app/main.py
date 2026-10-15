@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import db
+from .scrapers import messages as msg
 import httpx
 
 from .scrapers import detect_kind, drop_day_titles, fetch_html, fetch_menu, parse_also
@@ -43,7 +44,7 @@ def today() -> str:
 
 # Built-in voting option, always offered last.
 SKIP_URL = "vote-only:nejdem"
-SKIP_NAME = "Nejdem na obed"
+SKIP_NAME = msg.SKIP_NAME
 
 
 def seed_restaurants() -> None:
@@ -133,11 +134,11 @@ async def restaurant_source(rid: int) -> Response:
     """The page HTML exactly as the server downloads it, to debug a parser."""
     r = db.get_restaurant(rid)
     if not r or not has_menu(r):
-        raise HTTPException(404, "Reštaurácia neexistuje")
+        raise HTTPException(404, msg.RESTAURANT_MISSING)
     try:
         html = await fetch_html(r["url"])
     except httpx.HTTPError as e:
-        raise HTTPException(502, f"Stránku sa nepodarilo načítať: {e}")
+        raise HTTPException(502, msg.load_failed(str(e)))
     safe = "".join(ch if ch.isalnum() else "-" for ch in r["name"].lower()).strip("-") or "restauracia"
     return Response(html, media_type="text/html; charset=utf-8",
                     headers={"Content-Disposition": f'attachment; filename="{safe}.html"'})
@@ -168,7 +169,7 @@ def get_votes() -> dict:
 @app.post("/api/votes")
 def post_vote(body: VoteIn) -> dict:
     if not db.get_restaurant(body.restaurant_id):
-        raise HTTPException(404, "Reštaurácia neexistuje")
+        raise HTTPException(404, msg.RESTAURANT_MISSING)
     db.set_vote(today(), body.name.strip(), body.restaurant_id, body.note.strip())
     return get_votes()
 

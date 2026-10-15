@@ -13,11 +13,11 @@ import re
 import statistics
 from datetime import date
 from typing import Any
+from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup
 
-from urllib.parse import urljoin, urlparse
-
+from . import messages as msg
 from .base import MenuItem, MenuResult, MenuSection, clean_space, looks_daily, mark_daily, strip_accents
 
 NAME_KEYS = ("name", "title", "label")
@@ -234,4 +234,4 @@ def parse_choiceqr(html: str, url: str, today: date | None = None, pattern: str 
             have = {s.name for s in sections}
             return MenuResult(sections=sections, source_url=url, links=urls, daily_links=urls,
                               other_menus=[n for n in names if n not in have])
-    return MenuResult(source_url=url, error="Na stránke ChoiceQR som nenašiel dáta menu.")
+    return MenuResult(source_url=url, error=msg.NO_CHOICEQR_DATA)

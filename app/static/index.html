@@ -9,25 +9,26 @@
 <body>
   <header class="top">
     <h1>Menučka <span id="today" class="muted"></span></h1>
-    <button id="refresh" class="ghost" title="Znova stiahnuť menu zo všetkých reštaurácií">↻ Obnoviť menu</button>
+    <button id="refresh" class="ghost" data-i18n="refresh" data-i18n-title="refreshTitle">↻ Obnoviť menu</button>
   </header>
 
   <main>
     <section class="panel" id="vote-panel">
-      <h2>Kam ideš na obed?</h2>
+      <h2 data-i18n="question">Kam ideš na obed?</h2>
       <form id="vote-form" class="row">
-        <label>Meno<input id="vote-name" required maxlength="40" placeholder="Tvoje meno" autocomplete="name"></label>
-        <label>Reštika<select id="vote-restaurant" required></select></label>
-        <button type="submit">Uložiť</button>
-        <button type="button" id="vote-clear" class="ghost">Zrušiť môj hlas</button>
+        <label><span data-i18n="name">Meno</span><input id="vote-name" required maxlength="40" placeholder="Tvoje meno" data-i18n-placeholder="namePh" autocomplete="name"></label>
+        <label><span data-i18n="restaurant">Reštika</span><select id="vote-restaurant" required></select></label>
+        <button type="submit" data-i18n="save">Uložiť</button>
+        <button type="button" id="vote-clear" class="ghost" data-i18n="clear">Zrušiť môj hlas</button>
       </form>
       <div id="tally" class="tally"></div>
     </section>
 
-    <section id="menus" class="menus"><p class="muted">Načítavam menu…</p></section>
+    <section id="menus" class="menus"><p class="muted" data-i18n="loading">Načítavam menu…</p></section>
 
   </main>
   <div id="toast" role="status"></div>
+  <script src="/static/i18n.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>

@@ -11,6 +11,7 @@ from urllib.parse import urldefrag
 import httpx
 
 from . import ocr
+from . import messages as msg
 from .base import MenuResult, day_heading
 from .choiceqr import is_choiceqr, parse_choiceqr
 from .html_generic import NotFound, daily_document, parse_html, sections_from_lines
@@ -97,9 +98,7 @@ def only_daily(result: MenuResult) -> MenuResult:
     result.found_sections = [s.name for s in result.sections]
     result.sections = [s for s in result.sections if s.is_daily and s.items]
     if not result.sections:
-        result.error = "Denné menu som nerozoznal."
-        if result.other_menus:
-            result.error += " Na stránke je aj: " + ", ".join(result.other_menus) + "."
+        result.error = msg.not_recognized(result.other_menus)
     return result
 
 
@@ -108,10 +107,10 @@ def parse_file_lines(lines: list[str], url: str, opts: Options, from_image: bool
     try:
         sections = daily_document(lines, opts.today, opts.daily_section, opts.also)
     except NotFound as e:
-        msg = str(e)
-        if msg == "Na stránke som nenašiel denné menu.":
-            msg = "V dokumente som nenašiel denné menu." if lines else "Dokument sa nepodarilo prečítať."
-        return MenuResult(source_url=url, error=msg, from_image=from_image)
+        error = str(e)
+        if error == msg.NO_DAILY_MENU:
+            error = msg.NO_DAILY_IN_DOCUMENT if lines else msg.DOCUMENT_UNREADABLE
+        return MenuResult(source_url=url, error=error, from_image=from_image)
     return MenuResult(sections=sections, source_url=url, from_image=from_image)
 
 
@@ -123,7 +122,7 @@ async def _parse(client: httpx.AsyncClient, url: str, kind: str, opts: Options,
         return parse_file_lines(lines, url, opts, used_ocr)
     if len(r.content) <= MAX_FILE_BYTES and _is_image(url, r):
         if not ocr.available():
-            return MenuResult(source_url=url, images=[url], error="Denné menu je na obrázku.")
+            return MenuResult(source_url=url, images=[url], error=msg.MENU_IS_PICTURE)
         lines = await asyncio.to_thread(ocr.lines_from_image, r.content)
         result = parse_file_lines(lines, url, opts, True)
         result.images = [url]
@@ -156,13 +155,13 @@ async def read_images(client: httpx.AsyncClient, failed: MenuResult, opts: Optio
             sections = sections_from_lines(lines, opts.today, opts.daily_section, True, opts.also)
         except NotFound as e:
             # A picture with no menu at all (a promo poster) says nothing; a stale week does.
-            if "týždeň" in str(e) or "dnešný" in str(e):
+            if str(e) not in (msg.NO_DAILY_MENU,):
                 reason = reason or str(e)
             continue
         return MenuResult(sections=sections, source_url=failed.source_url, images=[src],
                           links=failed.links, from_image=True)
     return MenuResult(source_url=failed.source_url, images=failed.images, links=failed.links,
-                      error=reason or "Na obrázkoch som denné menu neprečítal.")
+                      error=reason or msg.PICTURES_UNREADABLE)
 
 
 async def fetch_menu(url: str, kind: str = "auto", selector: str | None = None,
@@ -205,10 +204,10 @@ async def fetch_menu(url: str, kind: str = "auto", selector: str | None = None,
         return await read_images(client, result, opts) or result
     except httpx.HTTPError as e:
         log.warning("fetch %s failed: %s", url, e)
-        return MenuResult(source_url=url, error=f"Stránku sa nepodarilo načítať: {type(e).__name__}: {e}")
+        return MenuResult(source_url=url, error=msg.load_failed(f"{type(e).__name__}: {e}"))
     except Exception as e:  # a parser bug must not take down the whole page
         log.exception("parse %s failed", url)
-        return MenuResult(source_url=url, error=f"Chyba pri spracovaní menu: {e}")
+        return MenuResult(source_url=url, error=msg.parse_failed(str(e)))
     finally:
         if own:
             await client.aclose()
