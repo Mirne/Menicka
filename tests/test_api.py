@@ -67,7 +67,8 @@ def test_restaurants_cannot_be_added_over_http(client):
 
 
 def test_index_served(client):
-    assert "Menučka" in client.get("/").text
+    html = client.get("/").text
+    assert "<title>Menu</title>" in html and "<h1>Menu <span" in html
 
 
 def test_source_download(client, monkeypatch):
