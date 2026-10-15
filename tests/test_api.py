@@ -11,7 +11,8 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     monkeypatch.setenv("DISABLE_REFRESH", "1")
     cfg = tmp_path / "r.yaml"
-    cfg.write_text("restaurants:\n  - name: A\n    url: https://a.choiceqr.com\n  - name: B\n    url: https://b.cz\n")
+    cfg.write_text("restaurants:\n  - name: A\n    url: https://a.choiceqr.com\n  - name: B\n    url: https://b.cz\n"
+                   "  - name: Pho Eden\n")
     monkeypatch.setenv("RESTAURANTS_FILE", str(cfg))
     import app.db, app.main
     importlib.reload(app.db)
@@ -27,12 +28,13 @@ def client(tmp_path, monkeypatch):
 
 def test_restaurants_seeded_and_kind_detected(client):
     rs = client.get("/api/restaurants").json()
-    assert [(r["name"], r["detected_kind"]) for r in rs] == [("A", "choiceqr"), ("B", "html")]
+    assert [(r["name"], r["has_menu"]) for r in rs] == [("A", True), ("B", True), ("Pho Eden", False)]
+    assert [r["detected_kind"] for r in rs[:2]] == ["choiceqr", "html"]
 
 
 def test_menus(client):
     menus = client.get("/api/menus").json()
-    assert len(menus) == 2
+    assert [m["restaurant"]["name"] for m in menus] == ["A", "B"]  # Pho Eden has no menu card
     assert menus[0]["result"]["sections"][0]["items"][0] == {"name": "Jídlo", "price": 150, "description": ""}
 
 
@@ -92,3 +94,22 @@ def test_old_database_gets_new_column(tmp_path, monkeypatch):
     db = importlib.reload(app.db)
     db.init()
     assert db.upsert_restaurant("X", "https://x.cz", daily_section="Menu dne")["daily_section"] == "Menu dne"
+
+
+def test_vote_only_restaurant(client):
+    pho = [r for r in client.get("/api/restaurants").json() if r["name"] == "Pho Eden"][0]
+    v = client.post("/api/votes", json={"name": "Jana", "restaurant_id": pho["id"]}).json()
+    assert v["votes"][0]["restaurant_id"] == pho["id"]
+    assert client.get(f"/api/restaurants/{pho['id']}/source").status_code == 404
+    import app.main as main
+    main.seed_restaurants()  # restarting does not duplicate it
+    assert [r["name"] for r in client.get("/api/restaurants").json()].count("Pho Eden") == 1
+
+
+def test_day_titles_are_dropped():
+    from datetime import date
+    from app.scrapers import drop_day_titles
+    from app.scrapers.base import MenuResult, MenuSection
+    names = ["Čtvrtek", "Čtvrtek/ Thursday", "Čt 15.10.", "Čtvrtek 15.10.", "Denní menu", "Výběr pizz k polednímu menu", "Polévky"]
+    r = drop_day_titles(MenuResult(sections=[MenuSection(n) for n in names]), date(2026, 10, 15))
+    assert [s.name for s in r.sections] == ["", "", "", "", "Denní menu", "Výběr pizz k polednímu menu", "Polévky"]

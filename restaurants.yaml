@@ -3,7 +3,7 @@
 # Reštaurácia, ktorú odtiaľto zmažeš, zmizne zo stránky aj s jej dnešnými hlasmi.
 #
 #   name:     zobrazený názov
-#   url:      stránka s menu, PDF alebo obrázok. "#kotva" na konci adresy vyberie tú časť stránky.
+#   url:      stránka s menu, PDF alebo obrázok. Bez url je reštika len na výber v hlasovaní. "#kotva" na konci adresy vyberie tú časť stránky.
 #   kind:     auto | choiceqr | html   (auto = choiceqr.com sa spozná podľa adresy)
 #   selector: voliteľný CSS selektor časti stránky, kde je menu (napr. "#denni-menu")
 #   daily_section: voliteľný text v názve sekcie / nadpisu denného menu (napr. "Lunch menu").
@@ -26,3 +26,4 @@ restaurants:
   - name: La Strada
     url: https://lastrada-brno.cz/poledni-menu/
     also: ["pizz"]
+  - name: Pho Eden

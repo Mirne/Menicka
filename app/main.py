@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 from . import db
 import httpx
 
-from .scrapers import detect_kind, fetch_html, fetch_menu, parse_also
+from .scrapers import detect_kind, drop_day_titles, fetch_html, fetch_menu, parse_also
 
 logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
 log = logging.getLogger("menicka")
@@ -48,6 +48,8 @@ def seed_restaurants() -> None:
     data = yaml.safe_load(RESTAURANTS_FILE.read_text(encoding="utf-8")) or {}
     rs = data.get("restaurants") or []
     for r in rs:
+        # A restaurant without url is only a voting option (no menu to fetch).
+        r["url"] = r.get("url") or f"vote-only:{r['name']}"
         db.upsert_restaurant(r["name"], r["url"], r.get("kind", "auto"), r.get("selector"),
                              r.get("daily_section"), ", ".join(parse_also(r.get("also"))))
     # restaurants.yaml is the list: whatever was removed from it goes away
@@ -56,9 +58,14 @@ def seed_restaurants() -> None:
         log.info("removed %d restaurants no longer in %s", removed, RESTAURANTS_FILE)
 
 
+def has_menu(r: dict) -> bool:
+    return r["url"].startswith(("http://", "https://"))
+
+
 async def refresh_one(r: dict) -> dict:
     result = await fetch_menu(r["url"], r.get("kind") or "auto", r.get("selector"), today=now().date(),
                               daily_section=r.get("daily_section"), also=r.get("also"))
+    drop_day_titles(result, now().date())
     entry = {"fetched_at": now().isoformat(timespec="seconds"), "day": today(), "result": result.to_dict()}
     _cache[r["id"]] = entry
     return entry
@@ -66,7 +73,7 @@ async def refresh_one(r: dict) -> dict:
 
 async def refresh_all() -> None:
     async with _lock:
-        rs = db.list_restaurants()
+        rs = [r for r in db.list_restaurants() if has_menu(r)]
         await asyncio.gather(*(refresh_one(r) for r in rs))
         log.info("refreshed %d restaurants", len(rs))
 
@@ -100,7 +107,8 @@ class VoteIn(BaseModel):
 
 
 def restaurant_view(r: dict) -> dict:
-    return {**r, "detected_kind": detect_kind(r["url"]) if r["kind"] == "auto" else r["kind"]}
+    return {**r, "has_menu": has_menu(r),
+            "detected_kind": detect_kind(r["url"]) if r["kind"] == "auto" else r["kind"]}
 
 
 @app.get("/api/health")
@@ -117,7 +125,7 @@ def get_restaurants() -> list[dict]:
 async def restaurant_source(rid: int) -> Response:
     """The page HTML exactly as the server downloads it, to debug a parser."""
     r = db.get_restaurant(rid)
-    if not r:
+    if not r or not has_menu(r):
         raise HTTPException(404, "Reštaurácia neexistuje")
     try:
         html = await fetch_html(r["url"])
@@ -130,7 +138,7 @@ async def restaurant_source(rid: int) -> Response:
 
 @app.get("/api/menus")
 async def get_menus() -> list[dict]:
-    rs = db.list_restaurants()
+    rs = [r for r in db.list_restaurants() if has_menu(r)]
     if any(r["id"] not in _cache or _cache[r["id"]]["day"] != today() for r in rs):
         # Wait for a refresh already running instead of fetching (and OCR-ing) twice.
         async with _lock:

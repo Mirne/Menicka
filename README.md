@@ -4,7 +4,7 @@ Stránka, ktorá zbiera denné menu z reštaurácií, ktoré zadáte, a ukazuje,
 
 - **Menu**: pre každú reštauráciu sa stiahne dnešné menu (pri štarte, potom každých 30 minút, alebo tlačidlom *Obnoviť menu*).
 - **Ľudia**: zadáš meno a vyberieš reštiku. Jeden hlas na osobu a deň, ďalší ho prepíše. Hlasy sa na druhý deň začínajú odznova.
-- **Reštaurácie**: iba v súbore `restaurants.yaml`. Reštaurácia, ktorú zo súboru zmažeš, po reštarte zmizne aj zo stránky.
+- **Reštaurácie**: iba v súbore `restaurants.yaml`. Reštika bez `url`, napríklad Pho Eden, je len na výber v hlasovaní a nemá kartu s menu. Reštaurácia, ktorú zo súboru zmažeš, po reštarte zmizne aj zo stránky.
 
 ## Spustenie
 

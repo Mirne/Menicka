@@ -63,7 +63,7 @@ function renderMenus() {
   const count = new Map();
   for (const v of state.votes) count.set(v.restaurant_id, (count.get(v.restaurant_id) || 0) + 1);
   $("#menus").innerHTML = state.menus.map(({ restaurant: r, result: m, fetched_at }) => {
-    const body = m.sections.map((s) => `<div class="sec"><h4>${esc(s.name)}</h4>${s.items.map((i) => `
+    const body = m.sections.map((s) => `<div class="sec">${s.name ? `<h4>${esc(s.name)}</h4>` : ""}${s.items.map((i) => `
         <div class="item"><div>${esc(i.name)}${i.description ? `<div class="desc">${esc(i.description)}</div>` : ""}</div>
         <span class="price">${fmtPrice(i.price)}</span></div>`).join("")}</div>`).join("");
     const found = m.error && m.found_sections.length

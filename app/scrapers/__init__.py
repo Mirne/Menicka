@@ -11,7 +11,7 @@ from urllib.parse import urldefrag
 import httpx
 
 from . import ocr
-from .base import MenuResult
+from .base import MenuResult, day_heading
 from .choiceqr import is_choiceqr, parse_choiceqr
 from .html_generic import NotFound, daily_document, parse_html, sections_from_lines
 from .pdf import lines_from_pdf
@@ -79,6 +79,15 @@ def _is_pdf(url: str, r: httpx.Response) -> bool:
 
 def _is_image(url: str, r: httpx.Response) -> bool:
     return r.headers.get("content-type", "").startswith("image/") or url.lower().split("?")[0].endswith(IMAGE_EXT)
+
+
+def drop_day_titles(result: MenuResult, today: date) -> MenuResult:
+    """Section titles like "Čtvrtek", "Čt 15.10." or "Čtvrtek/ Thursday" repeat the date
+    already shown in the page header, so they are left empty."""
+    for sec in result.sections:
+        if sec.name and day_heading(sec.name, today) is not None:
+            sec.name = ""
+    return result
 
 
 def only_daily(result: MenuResult) -> MenuResult:
