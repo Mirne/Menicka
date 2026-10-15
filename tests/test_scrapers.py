@@ -390,3 +390,92 @@ def test_everest_real_picture_next_week_is_stale():
     r = everest_real(date(2026, 10, 20))
     assert r.error == "Menu na stránke je pre týždeň 12.10.–16.10., nie pre dnešok."
     assert r.sections == []
+
+
+# --- PDFs, "#anchor" URLs and extra sections (pizza)
+
+def test_pdf_weekly_menu_today_only():
+    url = "https://cdn.example.net/media/Obedova-nabidka.pdf"
+    r = run_fetch_bytes({url: (FIXTURES / "obedova-nabidka-text.pdf").read_bytes()}, url, THURSDAY)
+    assert r.error is None, r.error
+    assert r.sections[0].name == "Čtvrtek 15. 10."
+    assert [(i.name, i.price) for i in r.sections[0].items] == [
+        ("Polévka: Kulajda", None), ("Hovězí guláš, houskový knedlík", 169.0), ("Zapečené těstoviny se sýrem", 149.0)]
+    assert not r.from_image
+
+
+def test_pdf_weekly_menu_next_week_is_stale():
+    url = "https://cdn.example.net/media/Obedova-nabidka.pdf"
+    r = run_fetch_bytes({url: (FIXTURES / "obedova-nabidka-text.pdf").read_bytes()}, url, date(2026, 10, 21))
+    assert r.error == "Menu na stránke je pre týždeň 12.10.–16.10., nie pre dnešok."
+
+
+def test_pdf_linked_from_page_is_followed():
+    page = """<html><body><main><h1>Restaurace</h1><p>Vítejte u nás, vaříme poctivě každý den.</p>
+    <a href="https://cdn.example.net/media/Obedova-nabidka.pdf">Obědová nabídka (PDF)</a></main></body></html>"""
+    r = run_fetch_bytes({"https://www.example.cz/": page,
+                         "https://cdn.example.net/media/Obedova-nabidka.pdf": (FIXTURES / "obedova-nabidka-text.pdf").read_bytes()},
+                        "https://www.example.cz/", THURSDAY)
+    assert r.error is None, r.error
+    assert r.source_url.endswith("Obedova-nabidka.pdf")
+    assert r.item_count == 3
+
+
+@needs_ocr
+def test_scanned_pdf_is_read_by_ocr():
+    url = "https://cdn.example.net/media/menu-scan.pdf"
+    r = run_fetch_bytes({url: (FIXTURES / "scanned-menu.pdf").read_bytes()}, url, THURSDAY)
+    assert r.error is None, r.error
+    assert r.from_image
+    assert r.sections[0].name == "Čtvrtek/ Thursday"
+    assert r.sections[0].items[0].name.startswith("Dal Adrak Soup")
+
+
+ONE_PAGE_SITE = """<html><body><nav><a href="#about">O nás</a><a href="#lunch-menu">Lunch</a></nav>
+<section id="about"><h2>O nás</h2><p>Steak 450 Kč, víno 120 Kč, vše čerstvé.</p></section>
+<section id="lunch-menu"><h2>Lunch menu</h2>
+  <p>Polévka: Dýňový krém 45 Kč</p><p>Kuřecí stehno, rýže 165 Kč</p></section>
+<section id="contact"><p>Tel. 777 111 222</p></section></body></html>"""
+
+
+def test_url_anchor_selects_that_part_of_the_page():
+    r = run_fetch({"https://korzar.example/": ONE_PAGE_SITE}, "https://korzar.example/#lunch-menu")
+    assert r.error is None, r.error
+    assert [(i.name, i.price) for s in r.sections for i in s.items] == [
+        ("Polévka: Dýňový krém", 45.0), ("Kuřecí stehno, rýže", 165.0)]
+
+
+def test_url_anchor_on_an_empty_marker_takes_what_follows():
+    page = """<html><body><div><a id="lunch-menu"></a><h2>Polední menu</h2><p>Svíčková 159 Kč</p>
+    <p>Rizoto 149 Kč</p></div><footer>Tel. 777 111 222</footer></body></html>"""
+    r = run_fetch({"https://korzar.example/": page}, "https://korzar.example/#lunch-menu")
+    assert [i.name for s in r.sections for i in s.items] == ["Svíčková", "Rizoto"]
+
+
+LA_STRADA = """<html><body><main><h1>Polední menu</h1>
+<h3>Pondělí</h3><p>Polévka: Gulášová</p><p>1. Kuřecí řízek, kaše 159 Kč</p>
+<h3>Čtvrtek</h3><p>Polévka: Kulajda</p><p>1. Lasagne 169 Kč</p><p>2. Rizoto s kuřecím masem 159 Kč</p>
+<h3>Pátek</h3><p>1. Smažený sýr 159 Kč</p>
+<h2>Výběr pizz k polednímu menu</h2>
+<p>Pondělí: Margherita 149 Kč</p><p>Čtvrtek: Diavola 169 Kč</p><p>Pátek: Quattro formaggi 179 Kč</p>
+</main><footer>Rezervace tel. 777 333 444</footer></body></html>"""
+
+
+def test_also_adds_todays_pizza():
+    url = "https://lastrada.example/poledni-menu/"
+    r = run_fetch({url: LA_STRADA}, url, also=["pizz"])
+    assert r.error is None, r.error
+    assert [s.name for s in r.sections] == ["Čtvrtek", "Výběr pizz k polednímu menu"]
+    assert [(i.name, i.price) for i in r.sections[1].items] == [("Diavola", 169.0)]
+    # without the setting the pizza is not shown
+    r2 = run_fetch({url: LA_STRADA}, url)
+    assert [s.name for s in r2.sections] == ["Čtvrtek"]
+
+
+def test_also_with_day_headings_inside_the_pizza_block():
+    page = LA_STRADA.replace("""<p>Pondělí: Margherita 149 Kč</p><p>Čtvrtek: Diavola 169 Kč</p><p>Pátek: Quattro formaggi 179 Kč</p>""",
+                             """<h4>Po</h4><p>Margherita 149 Kč</p><h4>Čt</h4><p>Diavola 169 Kč</p><p>Prosciutto 179 Kč</p>""")
+    url = "https://lastrada.example/poledni-menu/"
+    r = run_fetch({url: page}, url, also=["pizz"])
+    pizza = [s for s in r.sections if "pizz" in s.name.lower()]
+    assert [(i.name, i.price) for i in pizza[0].items] == [("Diavola", 169.0), ("Prosciutto", 179.0)]

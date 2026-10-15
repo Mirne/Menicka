@@ -2,13 +2,26 @@
 # Pri štarte sa nahrajú do databázy (podľa URL). Ďalšie sa dajú pridať aj priamo na stránke.
 #
 #   name:     zobrazený názov
-#   url:      stránka s menu
+#   url:      stránka s menu, PDF alebo obrázok. "#kotva" na konci adresy vyberie tú časť stránky.
 #   kind:     auto | choiceqr | html   (auto = choiceqr.com sa spozná podľa adresy)
 #   selector: voliteľný CSS selektor časti stránky, kde je menu (napr. "#denni-menu")
 #   daily_section: voliteľný text v názve sekcie / nadpisu denného menu (napr. "Lunch menu").
 #             Ukáže sa len sekcia, ktorá ho obsahuje. Na veľkosti písmen a diakritike nezáleží.
+#   also:     voliteľné ďalšie sekcie, ktoré sa ukážu popri dennom menu (napr. ["pizz"]).
+#             Ak sú rozpísané po dňoch, ukáže sa len dnešok.
 restaurants:
   - name: Padagali
     url: https://padagali.choiceqr.com/section:menu
   - name: Everest
     url: https://www.everestbrno.cz/
+  - name: U Dřeváka
+    url: https://udrevaka.cz/menu/pages/poledni-menu
+  - name: Korzár
+    url: https://korzar.com/#lunch-menu
+  - name: Obědová nabídka (PDF)
+    url: https://cdn.website.dish.co/media/28/63/10223461/Obedova-nabidka.pdf
+  - name: Suzie's
+    url: https://suzies.cz/poledni-menu/
+  - name: La Strada
+    url: https://lastrada-brno.cz/poledni-menu/
+    also: ["pizz"]

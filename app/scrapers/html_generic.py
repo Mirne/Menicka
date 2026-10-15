@@ -21,6 +21,7 @@ from bs4 import BeautifulSoup
 from .base import (
     MenuItem,
     MenuResult,
+    SHORT_WEEKDAYS,
     MenuSection,
     clean_space,
     day_heading,
@@ -211,8 +212,9 @@ def menu_links(soup: BeautifulSoup, base_url: str) -> list[str]:
         if not MENU_LINK_RE.search(strip_accents(text + " " + href)):
             continue
         is_file = re.search(r"\.(pdf|jpe?g|png|webp)(\?|$)", href, re.IGNORECASE)
+        is_pdf = re.search(r"\.pdf(\?|$)", href, re.IGNORECASE)
         if (urlparse(href).netloc == host or is_file) and href != base_url.split("#")[0]:
-            (daily if is_daily_url(href, text) and not is_file else out).append(href)
+            (daily if is_daily_url(href, text) and (is_pdf or not is_file) else out).append(href)
     # Daily-menu pages first, then iframes and other menu links.
     return list(dict.fromkeys(daily + out))[:8]
 
@@ -222,8 +224,9 @@ def daily_menu_links(soup: BeautifulSoup, base_url: str) -> list[str]:
     out = []
     for a in soup.find_all("a", href=True):
         href = urljoin(base_url, a["href"]).split("#")[0]
-        if urlparse(href).netloc == host and is_daily_url(href, clean_space(a.get_text())) \
-                and not re.search(r"\.(pdf|jpe?g|png|webp)(\?|$)", href, re.IGNORECASE):
+        is_pdf = re.search(r"\.pdf(\?|$)", href, re.IGNORECASE)
+        if (urlparse(href).netloc == host or is_pdf) and is_daily_url(href, clean_space(a.get_text())) \
+                and not re.search(r"\.(jpe?g|png|webp)(\?|$)", href, re.IGNORECASE):
             out.append(href)
     return list(dict.fromkeys(out))
 
@@ -253,8 +256,66 @@ def cut_at_stop(block: list[str]) -> list[str]:
     return block
 
 
+def per_day_filter(block: list[str], today: date) -> list[str] | None:
+    """Keep today's part of a block that lists the week ("Pondělí: Pizza Diavola 179 Kč").
+
+    Returns the block unchanged when it is not split by days, None when it is but has
+    nothing for today.
+    """
+    def day_of(line: str):
+        if find_price(line)[0] is not None:
+            return None
+        h = day_heading(line, today)
+        if h is not None:
+            return h
+        short = strip_accents(line).strip(" .:")
+        if short in SHORT_WEEKDAYS:  # "Čt" alone on a line
+            idx = SHORT_WEEKDAYS.index(short)
+            return idx, idx == today.weekday()
+        return None
+
+    heads = [(i, h) for i, line in enumerate(block) if (h := day_of(line)) is not None]
+    if len({key for _, (key, _) in heads}) >= 2:
+        for n, (i, (_, is_today)) in enumerate(heads):
+            if is_today:
+                end = heads[n + 1][0] if n + 1 < len(heads) else len(block)
+                return block[i + 1: end] or None
+        return None
+    dated = [(weekday_of(l), l) for l in block]
+    if sum(1 for wd, _ in dated if wd is not None) >= 2:
+        keep = []
+        for wd, line in dated:
+            if wd == today.weekday():
+                rest = re.sub(r"^[^\W\d_]+\.?\s*(?:/\s*[^\W\d_]+\s*)?[:\-–—]?\s*", "", line)
+                if rest:
+                    keep.append(rest)
+        return keep or None
+    return block
+
+
+def extra_sections(lines: list[str], today: date, texts: list[str], relaxed: bool,
+                   have: list[MenuSection]) -> list[MenuSection]:
+    """Sections the restaurant asked for on top of the daily menu (e.g. "pizz" for the pizza offer)."""
+    out: list[MenuSection] = []
+    shown = {strip_accents(i.name) for sec in have for i in sec.items}
+    for text in texts:
+        block = daily_heading_block(lines, text, relaxed)
+        if not block:
+            continue
+        body = per_day_filter(block[1:], today)
+        if not body:
+            continue
+        for sec in lines_to_sections(cut_at_stop(body), block[0], relaxed):
+            sec.items = [i for i in sec.items if strip_accents(i.name) not in shown]
+            if sec.items:
+                sec.is_daily = True
+                out.append(sec)
+                shown |= {strip_accents(i.name) for i in sec.items}
+    return out
+
+
 def sections_from_lines(lines: list[str], today: date, pattern: str | None = None,
-                        relaxed: bool = False) -> list[MenuSection]:
+                        relaxed: bool = False, also: list[str] | None = None) -> list[MenuSection]:
     """Today's menu from text lines (a web page or a picture read by OCR).
 
     Raises NotFound when the lines hold no menu for today.
@@ -277,11 +338,50 @@ def sections_from_lines(lines: list[str], today: date, pattern: str | None = Non
         sec.is_daily = True
     if not any(sec.items for sec in sections):
         raise NotFound("Na stránke som nenašiel denné menu.")
+    if also:
+        sections += extra_sections(lines, today, also, relaxed, sections)
     return sections
 
 
+def daily_document(lines: list[str], today: date, pattern: str | None = None,
+                   also: list[str] | None = None) -> list[MenuSection]:
+    """Lines of a page/PDF/picture that is itself the daily menu.
+
+    Tries the day-by-day and heading structure first; without it, the lines with a
+    price are the dishes. Raises NotFound when there is nothing usable.
+    """
+    try:
+        return sections_from_lines(lines, today, pattern, True, also)
+    except NotFound as e:
+        if str(e) != "Na stránke som nenašiel denné menu.":
+            raise
+    block = cut_at_stop([l for l in lines if find_price(l, True)[0] is not None])
+    sections = lines_to_sections(block, "Denné menu", True) if block else []
+    for sec in sections:
+        sec.is_daily = True
+    if not any(sec.items for sec in sections):
+        raise NotFound("Na stránke som nenašiel denné menu.")
+    return sections
+
+
+def fragment_root(soup: BeautifulSoup, url: str) -> BeautifulSoup | None:
+    """The part of a one-page site that "#lunch-menu" in the URL points at."""
+    frag = urlparse(url).fragment
+    if not frag:
+        return None
+    el = soup.find(id=frag) or soup.find(attrs={"name": frag})
+    if el is None:
+        return None
+    parts = [el]
+    if len(el.get_text(strip=True)) < 80:
+        # Only an anchor or a heading: the menu follows it.
+        parts += [sib for sib in el.find_next_siblings()][:30]
+    return BeautifulSoup("".join(str(p) for p in parts), "lxml")
+
+
 def parse_html(html: str, url: str, selector: str | None = None, today: date | None = None,
-               pattern: str | None = None, daily_page: bool = False) -> MenuResult:
+               pattern: str | None = None, daily_page: bool = False,
+               also: list[str] | None = None) -> MenuResult:
     """`daily_page`: the whole page is the daily menu (e.g. reached via a "Denní menu" link)."""
     today = today or date.today()
     daily_page = daily_page or is_daily_url(url)
@@ -295,7 +395,9 @@ def parse_html(html: str, url: str, selector: str | None = None, today: date | N
         if not picked:
             return MenuResult(**base, images=images, error=f"Selektor '{selector}' na stránke nič nenašiel.")
         root = BeautifulSoup("".join(str(p) for p in picked), "lxml")
-    if daily_page and not selector:
+    elif (frag := fragment_root(soup, url)) is not None:
+        root, daily_page = frag, True
+    elif daily_page:
         root = main_content(root)
     if daily_page:
         images = menu_images(root, url, any_image=True) or images
@@ -315,18 +417,14 @@ def parse_html(html: str, url: str, selector: str | None = None, today: date | N
             return MenuResult(**base, images=images, error="Vo vybranej časti stránky som nenašiel menu.")
         return MenuResult(**base, sections=sections, images=images)
     try:
-        return MenuResult(**base, sections=sections_from_lines(lines, today, pattern, relaxed), images=images)
+        if daily_page:
+            sections = daily_document(lines, today, pattern, also)
+        else:
+            sections = sections_from_lines(lines, today, pattern, relaxed, also)
+        return MenuResult(**base, sections=sections, images=images)
     except NotFound as e:
         if not daily_page or str(e) != "Na stránke som nenašiel denné menu.":
             return MenuResult(**base, images=images, error=str(e))
-    # The page is the daily menu but has no structure: its lines with a price are the dishes.
-    block = cut_at_stop([l for l in lines if find_price(l, True)[0] is not None])
-    if block:
-        sections = lines_to_sections(block, "Denné menu", True)
-        for sec in sections:
-            sec.is_daily = True
-        if any(sec.items for sec in sections):
-            return MenuResult(**base, sections=sections, images=images)
     if images:
         return MenuResult(**base, images=images, error="Denné menu je na obrázku.")
     # No prices at all: show the page text itself rather than nothing.

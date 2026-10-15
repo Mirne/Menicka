@@ -17,7 +17,7 @@ def client(tmp_path, monkeypatch):
     importlib.reload(app.db)
     main = importlib.reload(app.main)
 
-    async def fake_fetch(url, kind="auto", selector=None, today=None, client=None, daily_section=None):
+    async def fake_fetch(url, kind="auto", selector=None, today=None, client=None, daily_section=None, also=None):
         return MenuResult(sections=[MenuSection("Denní menu", [MenuItem("Jídlo", 150)], True)], source_url=url)
 
     monkeypatch.setattr(main, "fetch_menu", fake_fetch)
@@ -72,9 +72,11 @@ def test_source_download(client, monkeypatch):
     assert 'filename="a.html"' in r.headers["content-disposition"]
 
 
-def test_daily_section_saved(client):
-    r = client.post("/api/restaurants", json={"name": "E", "url": "https://e.cz", "daily_section": "Lunch"}).json()
+def test_daily_section_and_also_saved(client):
+    r = client.post("/api/restaurants", json={"name": "E", "url": "https://e.cz", "daily_section": "Lunch",
+                                              "also": "pizz,  dezert"}).json()
     assert r["daily_section"] == "Lunch"
+    assert r["also"] == "pizz, dezert"
 
 
 def test_old_database_gets_new_column(tmp_path, monkeypatch):

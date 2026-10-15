@@ -55,7 +55,7 @@ function renderSelects() {
   if (cur && state.restaurants.some((r) => String(r.id) === String(cur))) sel.value = cur;
   $("#restaurant-list").innerHTML = state.restaurants.map((r) => `<li>
       <div><strong>${esc(r.name)}</strong> <span class="badge">${esc(r.detected_kind)}</span>
-      <div class="url">${esc(r.url)}${r.selector ? ` · <code>${esc(r.selector)}</code>` : ""}${r.daily_section ? ` · sekcia „${esc(r.daily_section)}“` : ""}</div></div>
+      <div class="url">${esc(r.url)}${r.selector ? ` · <code>${esc(r.selector)}</code>` : ""}${r.daily_section ? ` · sekcia „${esc(r.daily_section)}“` : ""}${r.also ? ` · aj „${esc(r.also)}“` : ""}</div></div>
       <button class="ghost small" data-del="${r.id}">Odstrániť</button></li>`).join("")
     || `<li class="muted">Zatiaľ žiadne reštaurácie.</li>`;
 }
@@ -148,7 +148,8 @@ $("#add-form").addEventListener("submit", async (e) => {
   try {
     await api("/api/restaurants", { method: "POST", body: JSON.stringify({
       name: $("#add-name").value, url: $("#add-url").value, kind: $("#add-kind").value,
-      selector: $("#add-selector").value || null, daily_section: $("#add-daily").value || null }) });
+      selector: $("#add-selector").value || null, daily_section: $("#add-daily").value || null,
+      also: $("#add-also").value || null }) });
     e.target.reset();
     await loadAll();
     toast("Reštaurácia pridaná");

@@ -44,6 +44,8 @@ Zobrazuje sa iba dnešné denné menu. Zvyšok jedálneho lístka sa nezobrazuje
 |---|---|---|
 | `choiceqr` | adresa na `choiceqr.com` | Z dát stránky (`__NEXT_DATA__`) vytiahne sekcie a ponechá tú, ktorej názov znie ako denné menu: Denní, Polední, Obědové, Lunch, Daily, alebo dnešný deň v týždni. Ak taká nie je, hľadá v dátach iné menu podniku s takým názvom a skúsi ho otvoriť. |
 | `html` | všetko ostatné | Ak stránka vypisuje menu po dňoch, vezme dnešný deň. Rozozná „Čtvrtek“, „Čt 15.10.“ aj samotný dátum. Pri dátume musí sedieť dnešok, takže starý týždeň sa neukáže. Inak berie blok pod nadpisom „Denní / Polední menu / Lunch“. |
+| PDF | adresa na PDF alebo odkaz na PDF typu „Obědová nabídka“ | Prečíta text PDF a vezme dnešný deň. Naskenované PDF bez textu prečíta cez OCR. |
+| kotva | adresa končí `#niečo`, napríklad `#lunch-menu` | Číta len tú časť stránky, na ktorú kotva ukazuje. |
 | obrázok | menu je len ako obrázok | Obrázok prečíta cez OCR (Tesseract, čeština + angličtina) a vezme z neho dnešný deň. Zvládne aj týždenné menu v dvoch stĺpcoch. Ak je na obrázku týždeň, napríklad „12.10.2026-16.10.2026“, a dnešok doňho nepatrí, menu sa neukáže. Na karte je odkaz na pôvodný obrázok, lebo OCR môže urobiť drobné preklepy. |
 | podstránka | odkaz typu „Denní menu“ | Ak na hlavnej stránke menu nie je, otvorí odkaz na denné menu alebo vložený iframe. Takú stránku číta voľnejšie: cena môže byť aj číslo bez „Kč“, a keď nič nenájde, ukáže obrázok s menu alebo text stránky. Celý jedálny lístok nikdy. |
 
@@ -59,6 +61,7 @@ Karta reštaurácie vtedy ukáže, ktoré sekcie na stránke našla. Dá sa to o
 
 - `daily_section` vyberie sekciu alebo nadpis, ktorý ten text obsahuje. Na veľkosti písmen a diakritike nezáleží.
 - `selector` vyberie časť stránky podľa CSS selektora, napríklad `"#denni-menu"`.
+- `also` pridá k dennému menu ďalšie sekcie, napríklad `also: ["pizz"]` pre ponuku pízz. Ak je sekcia rozpísaná po dňoch, ukáže sa len dnešok.
 
 Na karte je aj odkaz *Stiahnuť HTML stránky na kontrolu*. Stiahne stránku presne tak, ako ju vidí server. Tento súbor sa hodí na opravu parsera.
 Stránky, ktoré menu vykresľujú až JavaScriptom alebo ho majú len v PDF, zatiaľ nečíta.

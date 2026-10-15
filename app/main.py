@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field, field_validator
 from . import db
 import httpx
 
-from .scrapers import KINDS, detect_kind, fetch_html, fetch_menu
+from .scrapers import KINDS, detect_kind, fetch_html, fetch_menu, parse_also
 
 logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
 log = logging.getLogger("menicka")
@@ -47,12 +47,13 @@ def seed_restaurants() -> None:
         return
     data = yaml.safe_load(RESTAURANTS_FILE.read_text(encoding="utf-8")) or {}
     for r in data.get("restaurants", []):
-        db.upsert_restaurant(r["name"], r["url"], r.get("kind", "auto"), r.get("selector"), r.get("daily_section"))
+        db.upsert_restaurant(r["name"], r["url"], r.get("kind", "auto"), r.get("selector"),
+                             r.get("daily_section"), ", ".join(parse_also(r.get("also"))))
 
 
 async def refresh_one(r: dict) -> dict:
     result = await fetch_menu(r["url"], r.get("kind") or "auto", r.get("selector"), today=now().date(),
-                              daily_section=r.get("daily_section"))
+                              daily_section=r.get("daily_section"), also=r.get("also"))
     entry = {"fetched_at": now().isoformat(timespec="seconds"), "day": today(), "result": result.to_dict()}
     _cache[r["id"]] = entry
     return entry
@@ -93,6 +94,7 @@ class RestaurantIn(BaseModel):
     kind: str = "auto"
     selector: str | None = Field(default=None, max_length=200)
     daily_section: str | None = Field(default=None, max_length=100)
+    also: str | None = Field(default=None, max_length=200)
 
     @field_validator("url")
     @classmethod
@@ -133,7 +135,8 @@ def get_restaurants() -> list[dict]:
 @app.post("/api/restaurants", status_code=201)
 async def add_restaurant(body: RestaurantIn) -> dict:
     r = db.upsert_restaurant(body.name.strip(), body.url, body.kind, (body.selector or "").strip() or None,
-                             (body.daily_section or "").strip() or None)
+                             (body.daily_section or "").strip() or None,
+                             ", ".join(parse_also(body.also)) or None)
     await refresh_one(r)
     return restaurant_view(r)
 
