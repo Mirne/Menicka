@@ -44,7 +44,7 @@ function renderTally() {
   const rows = [...by.entries()].sort((a, b) => b[1].length - a[1].length);
   $("#tally").innerHTML = rows.length
     ? rows.map(([rid, vs]) => `<div class="t"><strong>${esc(names.get(rid) || "?")} · ${vs.length}</strong>
-        <div class="who">${vs.map((v) => esc(v.name) + (v.note ? ` <span class="muted">(${esc(v.note)})</span>` : "")).join(", ")}</div></div>`).join("")
+        <div class="who">${vs.map((v) => esc(v.name)).join(", ")}</div></div>`).join("")
     : `<p class="muted">Dnes ešte nikto nehlasoval.</p>`;
 }
 
@@ -81,8 +81,7 @@ function renderMenus() {
         ${n ? `<span class="badge">${n} ${n === 1 ? "ide" : "idú"}</span>` : ""}</header>
       ${m.error ? `<div class="error">${esc(m.error)}</div>` : ""}
       ${found}${body}${images}${links}${debug}
-      <footer><span class="muted">stiahnuté ${fmtTime(fetched_at)}</span>
-        <button class="small" data-go="${r.id}">Idem sem</button></footer>
+      <footer><span class="muted">stiahnuté ${fmtTime(fetched_at)}</span></footer>
     </article>`;
   }).join("");
 }
@@ -111,7 +110,7 @@ async function vote(restaurantId) {
   if (!name) { $("#vote-name").focus(); toast("Najprv zadaj meno"); return; }
   store.set("menicka.name", name);
   store.set("menicka.restaurant", restaurantId);
-  const v = await api("/api/votes", { method: "POST", body: JSON.stringify({ name, restaurant_id: Number(restaurantId), note: $("#vote-note").value }) });
+  const v = await api("/api/votes", { method: "POST", body: JSON.stringify({ name, restaurant_id: Number(restaurantId) }) });
   state.votes = v.votes;
   $("#vote-restaurant").value = restaurantId;
   renderTally(); renderMenus();
@@ -124,10 +123,6 @@ $("#vote-clear").addEventListener("click", async () => {
   if (!name) return;
   const v = await api(`/api/votes/${encodeURIComponent(name)}`, { method: "DELETE" });
   state.votes = v.votes; renderTally(); renderMenus(); toast("Hlas zrušený");
-});
-$("#menus").addEventListener("click", (e) => {
-  const b = e.target.closest("[data-go]");
-  if (b) vote(b.dataset.go).catch((err) => toast(err.message));
 });
 $("#refresh").addEventListener("click", async (e) => {
   e.target.disabled = true;
