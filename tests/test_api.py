@@ -29,7 +29,7 @@ def client(tmp_path, monkeypatch):
 def test_restaurants_seeded_and_kind_detected(client):
     rs = client.get("/api/restaurants").json()
     assert [(r["name"], r["has_menu"]) for r in rs] == [
-        ("A", True), ("B", True), ("Pho Eden", False), ("Nejdem na obed", False)]
+        ("A", True), ("B", True), ("Pho Eden", False), ("Iné", False), ("Nejdem na obed", False)]
     assert [r["detected_kind"] for r in rs[:2]] == ["choiceqr", "html"]
 
 
@@ -88,7 +88,7 @@ def test_yaml_is_the_list_of_restaurants(client, tmp_path, monkeypatch):
     main.seed_restaurants()
     rs = client.get("/api/restaurants").json()
     assert [(r["name"], r["daily_section"], r["also"]) for r in rs] == [
-        ("A2", None, None), ("C", "Lunch", "pizz, dezert"), ("Nejdem na obed", None, None)]
+        ("A2", None, None), ("C", "Lunch", "pizz, dezert"), ("Iné", None, None), ("Nejdem na obed", None, None)]
     assert client.get("/api/votes").json()["votes"] == []  # B and its vote are gone
 
 
@@ -179,3 +179,12 @@ def test_new_day_starts_empty(client, monkeypatch):
     client.post("/api/votes", json={"name": "Robo", "restaurant_ids": [rid]})
     monkeypatch.setattr(main, "today", lambda: "2099-01-02")
     assert client.get("/api/votes").json() == {"day": "2099-01-02", "votes": []}
+
+
+def test_other_option_combines_with_restaurants(client):
+    rs = client.get("/api/restaurants").json()
+    other = [r for r in rs if r["other"]][0]
+    assert (other["name"], other["has_menu"], rs[-2]["id"]) == ("Iné", False, other["id"])  # before "Nejdem"
+    v = client.post("/api/votes", json={"name": "Eva", "restaurant_ids": [rs[0]["id"], other["id"]]}).json()
+    assert sorted(x["restaurant_id"] for x in v["votes"]) == sorted([rs[0]["id"], other["id"]])
+    assert "Iné" not in [m["restaurant"]["name"] for m in client.get("/api/menus").json()]

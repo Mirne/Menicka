@@ -23,13 +23,13 @@ def test_languages_have_the_same_texts_and_detection():
         const keys = {};
         for (const l of I18N.languages) {
           const L = I18N.make(l);
-          keys[l] = ["question", "choose", "noVotes", "fetched", "going", "skipName"].map((k) => typeof L.t(k) === "function" ? L.t(k)(2) : L.t(k, {time: "12:00"}));
+          keys[l] = ["question", "choose", "noVotes", "fetched", "going", "skipName", "otherName"].map((k) => typeof L.t(k) === "function" ? L.t(k)(2) : L.t(k, {time: "12:00"}));
         }
         console.log(JSON.stringify({
           keys, keySets: I18N.languages.map((l) => I18N.keys(l).sort().join(",")),
           detect: [["cs-CZ", "en"], ["sk"], ["de-DE", "cs"], ["de-DE"], [], ["EN-us"]].map((x) => I18N.detect(x)),
         }));""")
     assert result["detect"] == ["cs", "sk", "cs", "en", "en", "en"]
-    assert result["keys"]["cs"] == ["Kam jdeš na oběd?", "Vyber jednu nebo více restaurací", "Dnes ještě nikdo nehlasoval.", "staženo 12:00", "jdou", "Nejdu na oběd"]
+    assert result["keys"]["cs"] == ["Kam jdeš na oběd?", "Vyber jednu nebo více restaurací", "Dnes ještě nikdo nehlasoval.", "staženo 12:00", "jdou", "Nejdu na oběd", "Jiné"]
     assert result["keys"]["en"][0] == "Where are you going for lunch?"
     assert len(set(result["keySets"])) == 1  # sk, cs and en define the same texts

@@ -14,6 +14,7 @@ RESTAURANT_MISSING = "Reštaurácia neexistuje"
 SECTION_DAILY = "Denné menu"
 SECTION_PAGE_TEXT = "Text stránky s denným menu"
 SKIP_NAME = "Nejdem na obed"
+OTHER_NAME = "Iné"
 
 
 def not_recognized(other_menus: list[str]) -> str:

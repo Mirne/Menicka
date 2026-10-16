@@ -42,9 +42,11 @@ def today() -> str:
     return now().date().isoformat()
 
 
-# Built-in voting option, always offered last.
+# Built-in voting options, always offered last: "Iné" (somewhere else), then "Nejdem na obed".
+OTHER_URL = "vote-only:ine"
 SKIP_URL = "vote-only:nejdem"
 SKIP_NAME = msg.SKIP_NAME
+BUILT_IN = [{"name": msg.OTHER_NAME, "url": OTHER_URL}, {"name": SKIP_NAME, "url": SKIP_URL}]
 
 
 def seed_restaurants() -> None:
@@ -54,7 +56,7 @@ def seed_restaurants() -> None:
         rs = data.get("restaurants") or []
     else:
         log.info("no %s, only the built-in options", RESTAURANTS_FILE)
-    rs = [r for r in rs if r.get("url") != SKIP_URL] + [{"name": SKIP_NAME, "url": SKIP_URL}]
+    rs = [r for r in rs if r.get("url") not in (OTHER_URL, SKIP_URL)] + [dict(b) for b in BUILT_IN]
     for r in rs:
         # A restaurant without url is only a voting option (no menu to fetch).
         r["url"] = r.get("url") or f"vote-only:{r['name']}"
@@ -116,7 +118,7 @@ class VoteIn(BaseModel):
 
 
 def restaurant_view(r: dict) -> dict:
-    return {**r, "has_menu": has_menu(r), "skip": r["url"] == SKIP_URL,
+    return {**r, "has_menu": has_menu(r), "skip": r["url"] == SKIP_URL, "other": r["url"] == OTHER_URL,
             "detected_kind": detect_kind(r["url"]) if r["kind"] == "auto" else r["kind"]}
 
 
@@ -127,7 +129,7 @@ def health() -> dict:
 
 @app.get("/api/restaurants")
 def get_restaurants() -> list[dict]:
-    return sorted((restaurant_view(r) for r in db.list_restaurants()), key=lambda r: r["skip"])
+    return sorted((restaurant_view(r) for r in db.list_restaurants()), key=lambda r: (r["skip"], r["other"]))
 
 
 @app.get("/api/restaurants/{rid}/source")

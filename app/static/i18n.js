@@ -16,6 +16,7 @@
       enterName: "Najprv zadaj meno", saved: "Uložené", voteRemoved: "Hlas zrušený", refreshed: "Menu obnovené",
       going: (n) => (n === 1 ? "ide" : "idú"),
       skipName: "Nejdem na obed",
+      otherName: "Iné",
     },
     cs: {
       refresh: "↻ Obnovit menu", refreshTitle: "Znovu stáhnout menu ze všech restaurací",
@@ -29,6 +30,7 @@
       enterName: "Nejdřív zadej jméno", saved: "Uloženo", voteRemoved: "Hlas zrušen", refreshed: "Menu obnoveno",
       going: (n) => (n === 1 ? "jde" : "jdou"),
       skipName: "Nejdu na oběd",
+      otherName: "Jiné",
     },
     en: {
       refresh: "↻ Refresh menus", refreshTitle: "Download the menus from all restaurants again",
@@ -42,6 +44,7 @@
       enterName: "Enter your name first", saved: "Saved", voteRemoved: "Vote removed", refreshed: "Menus refreshed",
       going: () => "going",
       skipName: "Not going to lunch",
+      otherName: "Other",
     },
   };
 

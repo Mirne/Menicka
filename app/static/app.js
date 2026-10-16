@@ -9,7 +9,7 @@ document.documentElement.lang = L.lang;
 for (const el of document.querySelectorAll("[data-i18n]")) el.textContent = t(el.dataset.i18n);
 for (const el of document.querySelectorAll("[data-i18n-title]")) el.title = t(el.dataset.i18nTitle);
 for (const el of document.querySelectorAll("[data-i18n-placeholder]")) el.placeholder = t(el.dataset.i18nPlaceholder);
-const rname = (r) => (!r ? "?" : r.skip ? t("skipName") : r.name);
+const rname = (r) => (!r ? "?" : r.skip ? t("skipName") : r.other ? t("otherName") : r.name);
 
 const store = {
   get(k) { try { return localStorage.getItem(k); } catch { return null; } },
@@ -68,7 +68,7 @@ function myChoices() {
 
 function renderChoices() {
   const mine = myChoices();
-  $("#vote-choices").innerHTML = state.restaurants.map((r) => `<button type="button" class="choice${r.skip ? " skip" : ""}"
+  $("#vote-choices").innerHTML = state.restaurants.map((r) => `<button type="button" class="choice${r.skip || r.other ? " skip" : ""}"
       data-rid="${r.id}" aria-pressed="${mine.has(r.id)}">${esc(rname(r))}</button>`).join("");
 }
 
