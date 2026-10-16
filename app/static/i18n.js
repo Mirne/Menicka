@@ -6,8 +6,8 @@
   const UI = {
     sk: {
       refresh: "↻ Obnoviť menu", refreshTitle: "Znova stiahnuť menu zo všetkých reštaurácií",
-      question: "Kam ideš na obed?", name: "Meno", namePh: "Tvoje meno", restaurant: "Reštika",
-      save: "Uložiť", clear: "Zrušiť môj hlas", loading: "Načítavam menu…",
+      question: "Kam ideš na obed?", name: "Meno", namePh: "Tvoje meno", choose: "Vyber jednu alebo viac reštik",
+      clear: "Zrušiť môj hlas", loading: "Načítavam menu…",
       noVotes: "Dnes ešte nikto nehlasoval.", noRestaurants: "Žiadne reštaurácie. Pridaj ich do súboru restaurants.yaml.",
       foundSections: "Sekcie na stránke: {list}.",
       foundHint: "Ktorá je denné menu, nastavíš v <code>restaurants.yaml</code> cez <code>daily_section</code>.",
@@ -19,8 +19,8 @@
     },
     cs: {
       refresh: "↻ Obnovit menu", refreshTitle: "Znovu stáhnout menu ze všech restaurací",
-      question: "Kam jdeš na oběd?", name: "Jméno", namePh: "Tvoje jméno", restaurant: "Restaurace",
-      save: "Uložit", clear: "Zrušit můj hlas", loading: "Načítám menu…",
+      question: "Kam jdeš na oběd?", name: "Jméno", namePh: "Tvoje jméno", choose: "Vyber jednu nebo více restaurací",
+      clear: "Zrušit můj hlas", loading: "Načítám menu…",
       noVotes: "Dnes ještě nikdo nehlasoval.", noRestaurants: "Žádné restaurace. Přidej je do souboru restaurants.yaml.",
       foundSections: "Sekce na stránce: {list}.",
       foundHint: "Která je denní menu, nastavíš v <code>restaurants.yaml</code> přes <code>daily_section</code>.",
@@ -32,8 +32,8 @@
     },
     en: {
       refresh: "↻ Refresh menus", refreshTitle: "Download the menus from all restaurants again",
-      question: "Where are you going for lunch?", name: "Name", namePh: "Your name", restaurant: "Restaurant",
-      save: "Save", clear: "Remove my vote", loading: "Loading menus…",
+      question: "Where are you going for lunch?", name: "Name", namePh: "Your name", choose: "Pick one or more restaurants",
+      clear: "Remove my vote", loading: "Loading menus…",
       noVotes: "Nobody has voted today yet.", noRestaurants: "No restaurants. Add them to restaurants.yaml.",
       foundSections: "Sections on the page: {list}.",
       foundHint: "Set which one is the daily menu with <code>daily_section</code> in <code>restaurants.yaml</code>.",

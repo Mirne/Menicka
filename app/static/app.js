@@ -60,11 +60,16 @@ function renderTally() {
     : `<p class="muted">${esc(t("noVotes"))}</p>`;
 }
 
-function renderSelects() {
-  const sel = $("#vote-restaurant");
-  const cur = sel.value || store.get("menicka.restaurant");
-  sel.innerHTML = state.restaurants.map((r) => `<option value="${r.id}">${esc(rname(r))}</option>`).join("");
-  if (cur && state.restaurants.some((r) => String(r.id) === String(cur))) sel.value = cur;
+// The restaurants the person in the name field picked today.
+function myChoices() {
+  const me = $("#vote-name").value.trim().toLowerCase();
+  return new Set(state.votes.filter((v) => me && v.name.toLowerCase() === me).map((v) => v.restaurant_id));
+}
+
+function renderChoices() {
+  const mine = myChoices();
+  $("#vote-choices").innerHTML = state.restaurants.map((r) => `<button type="button" class="choice${r.skip ? " skip" : ""}"
+      data-rid="${r.id}" aria-pressed="${mine.has(r.id)}">${esc(rname(r))}</button>`).join("");
 }
 
 function renderMenus() {
@@ -97,12 +102,13 @@ function renderMenus() {
   }).join("");
 }
 
-function render() { renderSelects(); renderTally(); renderMenus(); }
+function render() { renderChoices(); renderTally(); renderMenus(); }
 
 async function loadVotes() {
   const v = await api("/api/votes");
   if (v.day !== state.day) return loadAll();  // the day changed while the page was open
   state.votes = v.votes;
+  renderChoices();
   renderTally();
   renderMenus();
 }
@@ -118,24 +124,35 @@ async function loadAll() {
   renderMenus();
 }
 
-async function vote(restaurantId) {
+// Click a restaurant to add it to your choices or take it back. "Nejdem na obed" excludes the rest.
+async function toggle(rid) {
   const name = $("#vote-name").value.trim();
   if (!name) { $("#vote-name").focus(); toast(t("enterName")); return; }
-  store.set("menicka.name", name);
-  store.set("menicka.restaurant", restaurantId);
-  const v = await api("/api/votes", { method: "POST", body: JSON.stringify({ name, restaurant_id: Number(restaurantId) }) });
+  const skipIds = new Set(state.restaurants.filter((r) => r.skip).map((r) => r.id));
+  const mine = myChoices();
+  if (mine.has(rid)) mine.delete(rid);
+  else {
+    for (const id of [...mine]) if (skipIds.has(id) || skipIds.has(rid)) mine.delete(id);
+    mine.add(rid);
+  }
+  const v = await api("/api/votes", { method: "POST", body: JSON.stringify({ name, restaurant_ids: [...mine] }) });
   state.votes = v.votes;
-  $("#vote-restaurant").value = restaurantId;
-  renderTally(); renderMenus();
-  toast(t("saved"));
+  renderChoices(); renderTally(); renderMenus();
+  toast(t(mine.size ? "saved" : "voteRemoved"));
 }
 
-$("#vote-form").addEventListener("submit", (e) => { e.preventDefault(); vote($("#vote-restaurant").value).catch((err) => toast(err.message)); });
+$("#vote-form").addEventListener("submit", (e) => e.preventDefault());
+$("#vote-choices").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-rid]");
+  if (b) toggle(Number(b.dataset.rid)).catch((err) => toast(err.message));
+});
+// The name is remembered in this browser as soon as it is typed.
+$("#vote-name").addEventListener("input", () => { store.set("menicka.name", $("#vote-name").value.trim()); renderChoices(); });
 $("#vote-clear").addEventListener("click", async () => {
   const name = $("#vote-name").value.trim();
   if (!name) return;
   const v = await api(`/api/votes/${encodeURIComponent(name)}`, { method: "DELETE" });
-  state.votes = v.votes; renderTally(); renderMenus(); toast(t("voteRemoved"));
+  state.votes = v.votes; renderChoices(); renderTally(); renderMenus(); toast(t("voteRemoved"));
 });
 $("#refresh").addEventListener("click", async (e) => {
   e.target.disabled = true;

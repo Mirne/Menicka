@@ -39,19 +39,49 @@ def test_menus(client):
     assert menus[0]["result"]["sections"][0]["items"][0] == {"name": "Jídlo", "price": 150, "description": ""}
 
 
-def test_votes_one_per_person_per_day(client):
-    rs = client.get("/api/restaurants").json()
-    client.post("/api/votes", json={"name": "Robo", "restaurant_id": rs[0]["id"]})
-    v = client.post("/api/votes", json={"name": "robo", "restaurant_id": rs[1]["id"], "note": "12:00"}).json()
-    assert [(x["name"], x["restaurant_id"], x["note"]) for x in v["votes"]] == [("robo", rs[1]["id"], "12:00")]
-    assert client.post("/api/votes", json={"name": "X", "restaurant_id": 999}).status_code == 404
+def test_votes_several_restaurants_per_person(client):
+    a, b = [r["id"] for r in client.get("/api/restaurants").json()[:2]]
+    v = client.post("/api/votes", json={"name": "Robo", "restaurant_ids": [a, b]}).json()
+    assert sorted((x["name"], x["restaurant_id"]) for x in v["votes"]) == [("Robo", a), ("Robo", b)]
+    # the list replaces the person's choices; the name is case-insensitive
+    v = client.post("/api/votes", json={"name": "robo", "restaurant_ids": [b]}).json()
+    assert [(x["name"], x["restaurant_id"]) for x in v["votes"]] == [("robo", b)]
+    assert client.post("/api/votes", json={"name": "X", "restaurant_ids": [999]}).status_code == 404
+    assert client.post("/api/votes", json={"name": "Robo", "restaurant_ids": []}).json()["votes"] == []
+    client.post("/api/votes", json={"name": "Robo", "restaurant_ids": [a, b]})
     assert client.delete("/api/votes/ROBO").json()["votes"] == []
 
+
+def test_not_going_excludes_restaurants(client):
+    rs = client.get("/api/restaurants").json()
+    skip = [r["id"] for r in rs if r["skip"]][0]
+    v = client.post("/api/votes", json={"name": "Jana", "restaurant_ids": [rs[0]["id"], skip]}).json()
+    assert [x["restaurant_id"] for x in v["votes"]] == [skip]
+
+
+def test_old_votes_table_is_migrated(tmp_path, monkeypatch):
+    import sqlite3
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    con = sqlite3.connect(tmp_path / "menicka.db")
+    con.executescript("""
+        CREATE TABLE restaurants (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, url TEXT NOT NULL UNIQUE,
+            kind TEXT NOT NULL DEFAULT 'auto', selector TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')));
+        CREATE TABLE votes (id INTEGER PRIMARY KEY AUTOINCREMENT, day TEXT NOT NULL, name TEXT NOT NULL,
+            name_key TEXT NOT NULL, restaurant_id INTEGER NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+            note TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL DEFAULT (datetime('now')), UNIQUE (day, name_key));
+        INSERT INTO restaurants (name, url) VALUES ('A', 'https://a.cz'), ('B', 'https://b.cz');
+        INSERT INTO votes (day, name, name_key, restaurant_id) VALUES ('2026-10-16', 'Robo', 'robo', 1);""")
+    con.commit(); con.close()
+    import app.db
+    db = importlib.reload(app.db)
+    db.init()
+    db.set_vote("2026-10-16", "Robo", 2)  # a second choice is now allowed
+    assert [(v["name"], v["restaurant_id"]) for v in db.list_votes("2026-10-16")] == [("Robo", 1), ("Robo", 2)]
 
 def test_yaml_is_the_list_of_restaurants(client, tmp_path, monkeypatch):
     import app.main as main
     rs = client.get("/api/restaurants").json()
-    client.post("/api/votes", json={"name": "Ja", "restaurant_id": rs[1]["id"]})
+    client.post("/api/votes", json={"name": "Ja", "restaurant_ids": [rs[1]["id"]]})
     cfg = tmp_path / "r.yaml"
     cfg.write_text("restaurants:\n  - name: A2\n    url: https://a.choiceqr.com\n"
                    "  - name: C\n    url: https://c.cz\n    daily_section: Lunch\n    also: [pizz, dezert]\n")
@@ -100,7 +130,7 @@ def test_old_database_gets_new_column(tmp_path, monkeypatch):
 
 def test_vote_only_restaurant(client):
     pho = [r for r in client.get("/api/restaurants").json() if r["name"] == "Pho Eden"][0]
-    v = client.post("/api/votes", json={"name": "Jana", "restaurant_id": pho["id"]}).json()
+    v = client.post("/api/votes", json={"name": "Jana", "restaurant_ids": [pho["id"]]}).json()
     assert v["votes"][0]["restaurant_id"] == pho["id"]
     assert client.get(f"/api/restaurants/{pho['id']}/source").status_code == 404
     import app.main as main
@@ -121,7 +151,7 @@ def test_not_going_option(client):
     rs = client.get("/api/restaurants").json()
     skip = rs[-1]
     assert (skip["name"], skip["skip"], skip["has_menu"]) == ("Nejdem na obed", True, False)
-    v = client.post("/api/votes", json={"name": "Peter", "restaurant_id": skip["id"]}).json()
+    v = client.post("/api/votes", json={"name": "Peter", "restaurant_ids": [skip["id"]]}).json()
     assert v["votes"][0]["restaurant_id"] == skip["id"]
     assert "Nejdem na obed" not in [m["restaurant"]["name"] for m in client.get("/api/menus").json()]
     import app.main as main
@@ -136,7 +166,7 @@ def test_votes_from_previous_days_are_cleared(client):
     import app.main as main
     rid = client.get("/api/restaurants").json()[0]["id"]
     db.set_vote("2020-01-01", "Stary", rid)
-    client.post("/api/votes", json={"name": "Dnes", "restaurant_id": rid})
+    client.post("/api/votes", json={"name": "Dnes", "restaurant_ids": [rid]})
     v = client.get("/api/votes").json()
     assert v["day"] == main.today() and [x["name"] for x in v["votes"]] == ["Dnes"]
     with db.connect() as c:
@@ -146,6 +176,6 @@ def test_votes_from_previous_days_are_cleared(client):
 def test_new_day_starts_empty(client, monkeypatch):
     import app.main as main
     rid = client.get("/api/restaurants").json()[0]["id"]
-    client.post("/api/votes", json={"name": "Robo", "restaurant_id": rid})
+    client.post("/api/votes", json={"name": "Robo", "restaurant_ids": [rid]})
     monkeypatch.setattr(main, "today", lambda: "2099-01-02")
     assert client.get("/api/votes").json() == {"day": "2099-01-02", "votes": []}

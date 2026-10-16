@@ -110,9 +110,9 @@ app = FastAPI(title="Menicka", lifespan=lifespan)
 
 
 class VoteIn(BaseModel):
+    """The person's full set of choices for today; an empty list removes their vote."""
     name: str = Field(min_length=1, max_length=40)
-    restaurant_id: int
-    note: str = Field(default="", max_length=120)
+    restaurant_ids: list[int] = Field(default_factory=list, max_length=50)
 
 
 def restaurant_view(r: dict) -> dict:
@@ -171,9 +171,14 @@ def get_votes() -> dict:
 
 @app.post("/api/votes")
 def post_vote(body: VoteIn) -> dict:
-    if not db.get_restaurant(body.restaurant_id):
+    rs = {r["id"]: r for r in db.list_restaurants()}
+    ids = list(dict.fromkeys(body.restaurant_ids))
+    if any(i not in rs for i in ids):
         raise HTTPException(404, msg.RESTAURANT_MISSING)
-    db.set_vote(today(), body.name.strip(), body.restaurant_id, body.note.strip())
+    # "Nejdem na obed" excludes going anywhere.
+    if len(ids) > 1 and any(rs[i]["url"] == SKIP_URL for i in ids):
+        ids = [i for i in ids if rs[i]["url"] == SKIP_URL]
+    db.set_votes(today(), body.name.strip(), ids)
     return get_votes()
 
 

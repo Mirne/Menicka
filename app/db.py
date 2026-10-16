@@ -9,7 +9,7 @@ from pathlib import Path
 DATA_DIR = Path(os.environ.get("DATA_DIR", "./data"))
 DB_PATH = DATA_DIR / "menicka.db"
 
-SCHEMA = """
+RESTAURANTS_TABLE = """
 CREATE TABLE IF NOT EXISTS restaurants (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
@@ -20,6 +20,9 @@ CREATE TABLE IF NOT EXISTS restaurants (
     also TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+"""
+# One row per person, day and chosen restaurant (a person may pick several).
+VOTES_TABLE = """
 CREATE TABLE IF NOT EXISTS votes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     day TEXT NOT NULL,
@@ -28,9 +31,10 @@ CREATE TABLE IF NOT EXISTS votes (
     restaurant_id INTEGER NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
     note TEXT NOT NULL DEFAULT '',
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-    UNIQUE (day, name_key)
+    UNIQUE (day, name_key, restaurant_id)
 );
 """
+SCHEMA = RESTAURANTS_TABLE + VOTES_TABLE
 
 
 @contextmanager
@@ -53,6 +57,15 @@ def init() -> None:
         for col in ("daily_section", "also"):  # databases created before these columns existed
             if col not in cols:
                 c.execute(f"ALTER TABLE restaurants ADD COLUMN {col} TEXT")
+        votes_sql = c.execute("SELECT sql FROM sqlite_master WHERE name = 'votes'").fetchone()["sql"]
+        if "name_key, restaurant_id" not in votes_sql:
+            # Older databases allowed one vote per person and day: rebuild with the new key.
+            c.executescript(
+                "ALTER TABLE votes RENAME TO votes_old;" + VOTES_TABLE +
+                """INSERT INTO votes (day, name, name_key, restaurant_id, note, updated_at)
+                       SELECT day, name, name_key, restaurant_id, note, updated_at FROM votes_old;
+                   DROP TABLE votes_old;"""
+            )
 
 
 def list_restaurants() -> list[dict]:
@@ -91,14 +104,30 @@ def delete_restaurant(rid: int) -> bool:
         return c.execute("DELETE FROM restaurants WHERE id = ?", (rid,)).rowcount > 0
 
 
-def set_vote(day: str, name: str, restaurant_id: int, note: str = "") -> None:
+def set_votes(day: str, name: str, restaurant_ids: list[int]) -> None:
+    """Replace a person's choices for the day (one or more restaurants, or none)."""
+    key = name.casefold()
+    with connect() as c:
+        keep = list(dict.fromkeys(restaurant_ids))
+        marks = ",".join("?" * len(keep))
+        drop = f" AND restaurant_id NOT IN ({marks})" if keep else ""
+        c.execute(f"DELETE FROM votes WHERE day = ? AND name_key = ?{drop}", (day, key, *keep))
+        for rid in keep:
+            c.execute(
+                """INSERT INTO votes (day, name, name_key, restaurant_id) VALUES (?, ?, ?, ?)
+                   ON CONFLICT(day, name_key, restaurant_id) DO UPDATE SET name = excluded.name""",
+                (day, name, key, rid),
+            )
+
+
+def set_vote(day: str, name: str, restaurant_id: int) -> None:
+    """Add one choice, keeping the others."""
+    key = name.casefold()
     with connect() as c:
         c.execute(
-            """INSERT INTO votes (day, name, name_key, restaurant_id, note) VALUES (?, ?, ?, ?, ?)
-               ON CONFLICT(day, name_key) DO UPDATE SET name = excluded.name,
-               restaurant_id = excluded.restaurant_id, note = excluded.note,
-               updated_at = datetime('now')""",
-            (day, name, name.casefold(), restaurant_id, note),
+            """INSERT INTO votes (day, name, name_key, restaurant_id) VALUES (?, ?, ?, ?)
+               ON CONFLICT(day, name_key, restaurant_id) DO UPDATE SET name = excluded.name""",
+            (day, name, key, restaurant_id),
         )
 
 
@@ -116,6 +145,6 @@ def delete_votes_before(day: str) -> int:
 def list_votes(day: str) -> list[dict]:
     with connect() as c:
         return [dict(r) for r in c.execute(
-            "SELECT name, restaurant_id, note, updated_at FROM votes WHERE day = ? ORDER BY updated_at",
+            "SELECT name, restaurant_id, updated_at FROM votes WHERE day = ? ORDER BY updated_at, id",
             (day,),
         )]

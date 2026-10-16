@@ -15,11 +15,13 @@
   <main>
     <section class="panel" id="vote-panel">
       <h2 data-i18n="question">Kam ideš na obed?</h2>
-      <form id="vote-form" class="row">
-        <label><span data-i18n="name">Meno</span><input id="vote-name" required maxlength="40" placeholder="Tvoje meno" data-i18n-placeholder="namePh" autocomplete="name"></label>
-        <label><span data-i18n="restaurant">Reštika</span><select id="vote-restaurant" required></select></label>
-        <button type="submit" data-i18n="save">Uložiť</button>
-        <button type="button" id="vote-clear" class="ghost" data-i18n="clear">Zrušiť môj hlas</button>
+      <form id="vote-form">
+        <div class="row">
+          <label><span data-i18n="name">Meno</span><input id="vote-name" required maxlength="40" placeholder="Tvoje meno" data-i18n-placeholder="namePh" autocomplete="name"></label>
+          <button type="button" id="vote-clear" class="ghost" data-i18n="clear">Zrušiť môj hlas</button>
+        </div>
+        <p class="choose muted" id="choose-label" data-i18n="choose">Vyber jednu alebo viac reštik</p>
+        <div id="vote-choices" class="choices" role="group" aria-labelledby="choose-label"></div>
       </form>
       <div id="tally" class="tally"></div>
     </section>
