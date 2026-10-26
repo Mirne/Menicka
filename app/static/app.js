@@ -1,5 +1,5 @@
 const $ = (s) => document.querySelector(s);
-const state = { restaurants: [], menus: [], votes: [] };
+const state = { restaurants: [], menus: [], votes: [], noteOwner: "", noteDirty: false };
 
 // Language from the browser; "?lang=cs" overrides it (handy for checking).
 const forced = new URLSearchParams(location.search).get("lang");
@@ -56,7 +56,7 @@ function renderTally() {
   const rows = [...by.entries()].sort((a, b) => skip.has(a[0]) - skip.has(b[0]) || b[1].length - a[1].length);
   $("#tally").innerHTML = rows.length
     ? rows.map(([rid, vs]) => `<div class="t${skip.has(rid) ? " skip" : ""}"><strong>${esc(rname(byId.get(rid)))} · ${vs.length}</strong>
-        <div class="who">${vs.map((v) => esc(v.name)).join(", ")}</div></div>`).join("")
+        <div class="who">${vs.map((v) => esc(v.name) + (byId.get(rid)?.other && v.note ? ` (${esc(v.note)})` : "")).join(", ")}</div></div>`).join("")
     : `<p class="muted">${esc(t("noVotes"))}</p>`;
 }
 
@@ -66,10 +66,28 @@ function myChoices() {
   return new Set(state.votes.filter((v) => me && v.name.toLowerCase() === me).map((v) => v.restaurant_id));
 }
 
+function myOtherVote() {
+  const me = $("#vote-name").value.trim().toLowerCase();
+  const other = state.restaurants.find((r) => r.other);
+  return state.votes.find((v) => me && v.name.toLowerCase() === me && v.restaurant_id === other?.id);
+}
+
+function renderOtherNote() {
+  const owner = `${state.day}:${$("#vote-name").value.trim().toLowerCase()}`;
+  const vote = myOtherVote();
+  $("#other-details").hidden = !vote;
+  if (state.noteOwner !== owner || !vote || !state.noteDirty) {
+    $("#other-note").value = vote?.note || "";
+    state.noteOwner = owner;
+    state.noteDirty = false;
+  }
+}
+
 function renderChoices() {
   const mine = myChoices();
   $("#vote-choices").innerHTML = state.restaurants.map((r) => `<button type="button" class="choice${r.skip || r.other ? " skip" : ""}"
       data-rid="${r.id}" aria-pressed="${mine.has(r.id)}">${esc(rname(r))}</button>`).join("");
+  renderOtherNote();
 }
 
 function renderMenus() {
@@ -135,11 +153,37 @@ async function toggle(rid) {
     for (const id of [...mine]) if (skipIds.has(id) || skipIds.has(rid)) mine.delete(id);
     mine.add(rid);
   }
-  const v = await api("/api/votes", { method: "POST", body: JSON.stringify({ name, restaurant_ids: [...mine] }) });
+  const v = await api("/api/votes", { method: "POST", body: JSON.stringify({ name, restaurant_ids: [...mine], other_note: $("#other-note").value.trim() }) });
   state.votes = v.votes;
+  state.noteDirty = false;
   renderChoices(); renderTally(); renderMenus();
+  if (state.restaurants.find((r) => r.id === rid)?.other && mine.has(rid)) $("#other-note").focus();
   toast(t(mine.size ? "saved" : "voteRemoved"));
 }
+
+async function saveOtherNote() {
+  if (!myOtherVote()) return;
+  const button = $("#other-save");
+  button.disabled = true;
+  const name = $("#vote-name").value.trim();
+  const note = $("#other-note").value.trim();
+  try {
+    const v = await api("/api/votes", { method: "POST", body: JSON.stringify({
+      name, restaurant_ids: [...myChoices()], other_note: note,
+    }) });
+    state.votes = v.votes;
+    if ($("#vote-name").value.trim() === name && $("#other-note").value.trim() === note) state.noteDirty = false;
+    renderChoices(); renderTally(); renderMenus();
+    toast(t("saved"));
+  } catch (err) { toast(err.message); }
+  finally { button.disabled = false; }
+}
+
+$("#other-note").addEventListener("input", () => { state.noteDirty = true; });
+$("#other-note").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); saveOtherNote(); }
+});
+$("#other-save").addEventListener("click", saveOtherNote);
 
 $("#vote-form").addEventListener("submit", (e) => e.preventDefault());
 $("#vote-choices").addEventListener("click", (e) => {

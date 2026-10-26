@@ -22,6 +22,10 @@
         </div>
         <p class="choose muted" id="choose-label" data-i18n="choose">Vyber jednu alebo viac reštik</p>
         <div id="vote-choices" class="choices" role="group" aria-labelledby="choose-label"></div>
+        <div id="other-details" class="row" hidden>
+          <label class="grow"><span data-i18n="otherDetails">Kam konkrétne?</span><input id="other-note" maxlength="200" data-i18n-placeholder="otherPh" placeholder="Názov reštaurácie alebo miesto"></label>
+          <button type="button" id="other-save" data-i18n="saveOther">Uložiť</button>
+        </div>
       </form>
       <div id="tally" class="tally"></div>
     </section>

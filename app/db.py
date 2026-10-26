@@ -104,7 +104,7 @@ def delete_restaurant(rid: int) -> bool:
         return c.execute("DELETE FROM restaurants WHERE id = ?", (rid,)).rowcount > 0
 
 
-def set_votes(day: str, name: str, restaurant_ids: list[int]) -> None:
+def set_votes(day: str, name: str, restaurant_ids: list[int], notes: dict[int, str] | None = None) -> None:
     """Replace a person's choices for the day (one or more restaurants, or none)."""
     key = name.casefold()
     with connect() as c:
@@ -118,6 +118,10 @@ def set_votes(day: str, name: str, restaurant_ids: list[int]) -> None:
                    ON CONFLICT(day, name_key, restaurant_id) DO UPDATE SET name = excluded.name""",
                 (day, name, key, rid),
             )
+            if notes is not None and rid in notes:
+                c.execute("UPDATE votes SET note = ?, updated_at = datetime('now') "
+                          "WHERE day = ? AND name_key = ? AND restaurant_id = ?",
+                          (notes[rid], day, key, rid))
 
 
 def set_vote(day: str, name: str, restaurant_id: int) -> None:
@@ -145,6 +149,6 @@ def delete_votes_before(day: str) -> int:
 def list_votes(day: str) -> list[dict]:
     with connect() as c:
         return [dict(r) for r in c.execute(
-            "SELECT name, restaurant_id, updated_at FROM votes WHERE day = ? ORDER BY updated_at, id",
+            "SELECT name, restaurant_id, note, updated_at FROM votes WHERE day = ? ORDER BY updated_at, id",
             (day,),
         )]

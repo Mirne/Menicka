@@ -188,3 +188,36 @@ def test_other_option_combines_with_restaurants(client):
     v = client.post("/api/votes", json={"name": "Eva", "restaurant_ids": [rs[0]["id"], other["id"]]}).json()
     assert sorted(x["restaurant_id"] for x in v["votes"]) == sorted([rs[0]["id"], other["id"]])
     assert "Iné" not in [m["restaurant"]["name"] for m in client.get("/api/menus").json()]
+
+
+def test_other_note_is_saved_edited_and_preserved(client):
+    rs = client.get("/api/restaurants").json()
+    other = next(r["id"] for r in rs if r["other"])
+    regular = rs[0]["id"]
+    payload = {"name": "Eva", "restaurant_ids": [other, regular], "other_note": "  Bistro pri práci  "}
+    response = client.post("/api/votes", json=payload)
+    assert response.status_code == 200
+    by_id = {v["restaurant_id"]: v for v in client.get("/api/votes").json()["votes"]}
+    assert by_id[other]["note"] == "Bistro pri práci"
+    assert by_id[regular]["note"] == ""
+    # Older clients that omit the new field must preserve an existing note.
+    client.post("/api/votes", json={"name": "eva", "restaurant_ids": [other]})
+    assert client.get("/api/votes").json()["votes"][0]["note"] == "Bistro pri práci"
+    payload.update(other_note="Iné bistro", restaurant_ids=[other])
+    assert client.post("/api/votes", json=payload).json()["votes"][0]["note"] == "Iné bistro"
+    payload["other_note"] = ""
+    assert client.post("/api/votes", json=payload).json()["votes"][0]["note"] == ""
+
+
+def test_other_note_is_personal_and_removed_with_the_choice(client):
+    rs = client.get("/api/restaurants").json()
+    other = next(r["id"] for r in rs if r["other"])
+    skip = next(r["id"] for r in rs if r["skip"])
+    for name, note in [("Eva", "Bistro"), ("Robo", "Doma")]:
+        client.post("/api/votes", json={"name": name, "restaurant_ids": [other], "other_note": note})
+    client.post("/api/votes", json={"name": "Eva", "restaurant_ids": [skip, other], "other_note": "Bistro"})
+    votes = client.get("/api/votes").json()["votes"]
+    assert sorted((v["name"], v["note"]) for v in votes) == [("Eva", ""), ("Robo", "Doma")]
+    client.post("/api/votes", json={"name": "Eva", "restaurant_ids": [other]})
+    assert next(v for v in client.get("/api/votes").json()["votes"] if v["name"] == "Eva")["note"] == ""
+    assert client.post("/api/votes", json={"name": "Eva", "restaurant_ids": [other], "other_note": "x" * 201}).status_code == 422
