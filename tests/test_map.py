@@ -65,7 +65,7 @@ const restaurants = [
   assert.equal(officeMarker.popup.children[1].textContent, "Šumavská 31, Brno");
   assert.equal(officeMarker.opts.icon.html, "★");
   assert.ok(officeMarker.opts.icon.className.includes("office-pin"));
-  assert.equal(officeMarker.tooltipOptions.permanent, true);
+  assert.equal(officeMarker.tooltipOptions.permanent, false);
   assert.deepEqual(Array.from(record.view), [49.2098916, 16.5925845]);
   assert.ok(Math.abs((record.bounds[0][0] + record.bounds[1][0]) / 2 - record.view[0]) < 1e-8);
   assert.ok(Math.abs((record.bounds[0][1] + record.bounds[1][1]) / 2 - record.view[1]) < 1e-8);

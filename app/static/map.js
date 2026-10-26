@@ -110,7 +110,7 @@
         const label = document.createElement("span");
         label.textContent = r.name;
         const marker = Leaflet.marker([r.latitude, r.longitude], { icon, title: r.name, alt: r.name })
-          .bindTooltip(label, { permanent: Boolean(r.company), direction: "top" }).bindPopup(popup(r, t)).addTo(layer);
+          .bindTooltip(label, { permanent: false, direction: "top" }).bindPopup(popup(r, t)).addTo(layer);
         markers.set(r.id, marker);
       });
       map.invalidateSize();
