@@ -556,3 +556,46 @@ def test_la_strada_today_with_prices_from_menu_table_and_only_the_pizza():
         ("4) Grilovaný losos, zeleninové rizoto", 175.0)]
     assert [(i.name, i.price) for i in pizza.items] == [
         ("Pizza Primavera (rajčatový základ, mozzarella, cherry, kukuřice, špenát)", 179.0)]
+
+
+@pytest.mark.parametrize("today,prices,first", [
+    (date(2026, 10, 26), [174, 214, 184, 184], "Polévka: Zelná"),
+    (date(2026, 10, 30), [174, 214, 184, 184], "Polévka: Gulášová"),
+    (date(2026, 11, 2), [174, 194, 184, 184], "Polévka: Drůbeží"),
+])
+def test_u_drevaka_real_week_labels_and_bare_prices(today, prices, first):
+    url = "https://udrevaka.cz/menu/pages/poledni-menu"
+    r = run_fetch_bytes({url: (FIXTURES / "u-drevaka-2026-10-26.html").read_bytes()}, url, today)
+    assert r.error is None, r.error
+    [section] = r.sections
+    assert r.item_count == 5
+    assert section.items[0].name.startswith(first)
+    assert [i.price for i in section.items[1:]] == prices
+
+
+def test_u_drevaka_real_weekend_does_not_fall_back_to_whole_week():
+    url = "https://udrevaka.cz/menu/pages/poledni-menu"
+    r = run_fetch_bytes({url: (FIXTURES / "u-drevaka-2026-10-26.html").read_bytes()}, url, date(2026, 10, 31))
+    assert r.error and not r.sections
+
+
+@pytest.mark.parametrize("pdf_url", [
+    "https://cdn.website.dish.co/media/0b/32/10251601/Obedova-nabidka.pdf",
+    "https://cdn.website.dish.co/media/new/upload/Obedova-nabidka.pdf",
+])
+def test_nemilosrdni_bratri_follows_current_pdf_instead_of_opening_hours(pdf_url):
+    url = "https://unemilosrdnychbratri.cz/?lang=cs"
+    page = f'''<html><body><h1>U Nemilosrdných Bratří</h1><h2>Naše nabídka</h2>
+    <a href="https://cdn.website.dish.co/media/old/Jidelni-listek.pdf">Jídelní lístek</a>
+    <a href="{pdf_url}">Obědová nabídka</a>
+    <h2>Naše otevírací doba</h2><p>Pondělí</p><p>11:00 – 22:00</p>
+    <p>Úterý</p><p>11:00 – 23:00</p><p>Čtvrtek</p><p>11:00 – 23:00</p></body></html>'''
+    r = run_fetch_bytes({url: page, pdf_url: (FIXTURES / "obedova-nabidka-text.pdf").read_bytes()},
+                        url, THURSDAY)
+    assert r.error is None, r.error
+    assert r.source_url == pdf_url
+    assert [(i.name, i.price) for s in r.sections for i in s.items] == [
+        ("Polévka: Kulajda", None),
+        ("Hovězí guláš, houskový knedlík", 169),
+        ("Zapečené těstoviny se sýrem", 149),
+    ]

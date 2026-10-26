@@ -179,7 +179,7 @@ def day_heading(text: str, today: date) -> tuple[object, bool] | None:
     Accepts "Čtvrtek", "Čtvrtek 15.10.", "Čt 15. 10.", "15.10.2026". When the line has
     a date, the date decides, so last week's menu does not count as today's.
     """
-    if len(text) > 60:
+    if len(text) > 60 or RANGE_RE.search(text):
         return None
     t = strip_accents(clean_space(text))
     d = date_in(t, today)
