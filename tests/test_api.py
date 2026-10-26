@@ -230,7 +230,7 @@ def test_index_versions_all_assets_and_revalidates_html(client, tmp_path, monkey
     from bs4 import BeautifulSoup
     first = client.get("/")
     assert first.headers["cache-control"] == "no-cache"
-    assets = ("style.css", "i18n.js", "app.js")
+    assets = ("style.css", "i18n.js", "map.js", "app.js")
     version = hashlib.sha256(b"".join((main.STATIC / f).read_bytes() for f in assets)).hexdigest()[:16]
     for filename in assets:
         assert f"/static/{filename}?v={version}" in first.text
@@ -265,3 +265,32 @@ def test_other_autosave_only_edits_existing_current_day_choice(client):
     votes = client.patch("/api/votes/other-note", json=payload).json()["votes"]
     assert [(v["restaurant_id"], v["note"]) for v in votes] == [(regular, "")]
     assert client.patch("/api/votes/other-note", json={**payload, "other_note": "x" * 201}).status_code == 422
+
+
+def test_map_locations_are_loaded_without_changing_votes(client, tmp_path, monkeypatch):
+    import app.main as main
+    rs = client.get("/api/restaurants").json()
+    rid = rs[0]["id"]
+    client.post("/api/votes", json={"name": "Eva", "restaurant_ids": [rid]})
+    cfg = tmp_path / "locations.yaml"
+    cfg.write_text("restaurants:\n  - name: A\n    url: https://a.choiceqr.com\n"
+                   "    address: Test street 1, Brno\n    latitude: 49.2\n    longitude: 16.6\n"
+                   "  - name: Pho Eden\n    address: Veveří 65, Brno\n    latitude: 49.20356\n    longitude: 16.59632\n")
+    monkeypatch.setattr(main, "RESTAURANTS_FILE", cfg)
+    main.seed_restaurants()
+    rs = client.get("/api/restaurants").json()
+    assert rs[0]["id"] == rid and rs[0]["address"] == "Test street 1, Brno"
+    assert (rs[0]["latitude"], rs[0]["longitude"]) == (49.2, 16.6)
+    assert rs[1]["has_menu"] is False and rs[1]["latitude"] == 49.20356
+    assert all(r["latitude"] is None for r in rs if r["skip"] or r["other"])
+    assert client.get("/api/votes").json()["votes"][0]["restaurant_id"] == rid
+
+
+def test_all_configured_restaurants_have_brno_locations():
+    import pathlib
+    import yaml
+    rows = yaml.safe_load((pathlib.Path(__file__).parent.parent / "restaurants.yaml").read_text())["restaurants"]
+    for row in rows:
+        assert row["address"], row["name"]
+        assert 49.18 < row["latitude"] < 49.24, row["name"]
+        assert 16.53 < row["longitude"] < 16.63, row["name"]

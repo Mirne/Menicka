@@ -33,9 +33,18 @@
 
     <section id="menus" class="menus"><p class="muted" data-i18n="loading">Načítavam menu…</p></section>
 
+    <section id="map-panel" class="panel" aria-labelledby="map-title">
+      <h2 id="map-title" data-i18n="mapTitle">Mapa podnikov</h2>
+      <p id="map-status" class="muted" role="status" data-i18n="mapLoading">Načítavam mapu…</p>
+      <div class="map-layout">
+        <div id="restaurant-map" role="region" aria-labelledby="map-title"></div>
+        <ol id="map-places" class="map-places"></ol>
+      </div>
+    </section>
   </main>
   <div id="toast" role="status"></div>
   <script src="/static/i18n.js"></script>
+  <script src="/static/map.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>

@@ -4,6 +4,7 @@
 #
 #   name:     zobrazený názov
 #   url:      stránka s menu, PDF alebo obrázok. Bez url je reštika len na výber v hlasovaní. "#kotva" na konci adresy vyberie tú časť stránky.
+#   address, latitude, longitude: poloha podniku na mape (overené 26.10.2026: OpenStreetMap a oficiálne weby).
 #   kind:     auto | choiceqr | html   (auto = choiceqr.com sa spozná podľa adresy)
 #   selector: voliteľný CSS selektor časti stránky, kde je menu (napr. "#denni-menu")
 #   daily_section: voliteľný text v názve sekcie / nadpisu denného menu (napr. "Lunch menu").
@@ -12,42 +13,102 @@
 #             Ak sú rozpísané po dňoch, ukáže sa len dnešok.
 restaurants:
   - name: Padagali
+    address: Kotlářská 51a, Brno
+    latitude: 49.2078989
+    longitude: 16.6030499
     url: https://padagali.choiceqr.com/section:menu
   - name: Everest
+    address: Veveří 61, Brno
+    latitude: 49.2033632
+    longitude: 16.5965662
     url: https://www.everestbrno.cz/
   - name: U Dřeváka
+    address: Dřevařská 22, Brno
+    latitude: 49.2091127
+    longitude: 16.6009335
     url: https://udrevaka.cz/menu/pages/poledni-menu
   - name: Korzár
+    address: Minská 26, Brno
+    latitude: 49.2111279
+    longitude: 16.5842932
     url: https://korzar.com/#lunch-menu
   - name: Nemilosrdní bratři
+    address: Kounicova 83, Brno
+    latitude: 49.2119530
+    longitude: 16.5925510
     url: https://unemilosrdnychbratri.cz/?lang=cs
   - name: Suzie's
+    address: Kounicova 10, Brno
+    latitude: 49.2016861
+    longitude: 16.6020495
     url: https://suzies.cz/poledni-menu/
   - name: La Strada
+    address: Kounicova 53, Brno
+    latitude: 49.2033888
+    longitude: 16.5996509
     url: https://lastrada-brno.cz/poledni-menu/
     also: ["pizz"]
   - name: Pho Eden
+    address: Veveří 65, Brno
+    latitude: 49.2035629
+    longitude: 16.5963231
   - name: Lokofu
+    address: Kounicova 67a, Brno
+    latitude: 49.2097904
+    longitude: 16.5937159
   - name: Naber si
+    address: Rosického náměstí 9, Brno
+    latitude: 49.2149474
+    longitude: 16.5691783
     url: https://nabersi.cz/
     selector: "#dnes-tab-pane"
   - name: Sul Campo
+    address: Fanderlíkova 17, Brno
+    latitude: 49.2123443
+    longitude: 16.5722954
     url: https://www.sulcampobrno.cz/denni-menu/
   - name: V Zatáčce
+    address: Absolonova 10a, Brno
+    latitude: 49.2189093
+    longitude: 16.5569009
     url: https://restaurace-v-zatacce.eatbu.com/?lang=cs
   - name: Hubatá holka
+    address: Hlavní 111, Brno
+    latitude: 49.2178958
+    longitude: 16.5548631
     url: https://hubataholka.cz/denni-menu/
   - name: U Karla
+    address: Bayerova 8, Brno
+    latitude: 49.2059500
+    longitude: 16.6026518
     url: https://ukarlabrno.cz/menu/pages/poledni-menu
   - name: Nepal India Thali
+    address: třída Kpt. Jaroše 13, Brno
+    latitude: 49.2014417
+    longitude: 16.6105621
     url: https://www.indiathali.cz/#main
   # Facebook-only source: https://www.facebook.com/zocesko/?locale=cs_CZ
   - name: Zô
+    address: Bayerova 10, Brno
+    latitude: 49.2062190
+    longitude: 16.6024915
   # No daily menu: https://www.facebook.com/p/FLEK_Brno-100089514188514/
   - name: FLEK
+    address: Veveří 6, Brno
+    latitude: 49.1991369
+    longitude: 16.6031279
   # Regular fast-food offer, voting only: https://aktin.cz/prodejny/vilgain-fast-food-smetanova
   - name: Vilgain Fast Food Smetanova
+    address: Smetanova 19, Brno
+    latitude: 49.2019522
+    longitude: 16.6025642
   - name: Garden Food Concept
+    address: Kounicova 39, Brno
+    latitude: 49.2016466
+    longitude: 16.6015849
     url: https://www.gardenfoodconcept.cz/poledni-menu/
   - name: Flank
+    address: Botanická 72, Brno
+    latitude: 49.2116396
+    longitude: 16.5973491
     url: https://www.flank.cz/denni-menu/
