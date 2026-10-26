@@ -115,6 +115,7 @@ class VoteIn(BaseModel):
     """The person's full set of choices for today; an empty list removes their vote."""
     name: str = Field(min_length=1, max_length=40)
     restaurant_ids: list[int] = Field(default_factory=list, max_length=50)
+    other_note: str | None = Field(default=None, max_length=200)
 
 
 def restaurant_view(r: dict) -> dict:
@@ -180,7 +181,9 @@ def post_vote(body: VoteIn) -> dict:
     # "Nejdem na obed" excludes going anywhere.
     if len(ids) > 1 and any(rs[i]["url"] == SKIP_URL for i in ids):
         ids = [i for i in ids if rs[i]["url"] == SKIP_URL]
-    db.set_votes(today(), body.name.strip(), ids)
+    notes = ({i: body.other_note.strip() for i in ids if rs[i]["url"] == OTHER_URL}
+             if body.other_note is not None else None)
+    db.set_votes(today(), body.name.strip(), ids, notes)
     return get_votes()
 
 
