@@ -22,6 +22,7 @@ from . import messages as msg
 
 from .base import (
     MenuItem,
+    RANGE_RE,
     MenuResult,
     SHORT_WEEKDAYS,
     MenuSection,
@@ -101,6 +102,8 @@ def menu_price_table(lines: list[str]) -> dict[int, float]:
 
 def is_noise(line: str) -> bool:
     t = strip_accents(line)
+    if re.fullmatch(r"\d{1,2}:\d{2}\s*[-–—]\s*\d{1,2}:\d{2}", t):
+        return True  # opening hours are not dishes
     if not re.search(r"[^\W_]", line):  # only punctuation, e.g. "```"
         return True
     price, rest = find_price(line)
@@ -388,6 +391,8 @@ def sections_from_lines(lines: list[str], today: date, pattern: str | None = Non
     """
     lines = split_glued_headings(lines)
     stale = stale_week(lines, today)
+    # Week labels delimit dates, but must never become a day or a dish.
+    lines = [line for line in lines if not RANGE_RE.search(line)]
     block = today_block(lines, today, relaxed)
     if stale and block is not None:
         raise NotFound(stale)
