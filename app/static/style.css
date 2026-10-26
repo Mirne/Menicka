@@ -75,3 +75,5 @@ code { font-size: .92em; }
 @media (max-width: 700px) { .map-layout { grid-template-columns: minmax(0, 1fr); } #restaurant-map { height: 360px; } .map-places { max-height: 220px; } }
 .map-layout.map-unavailable { display: block; }
 #restaurant-map[hidden] { display: none; }
+
+.restaurant-pin.office-pin { background: #2563eb; color: #fff; font-size: 20px; line-height: 30px; z-index: 1000 !important; }

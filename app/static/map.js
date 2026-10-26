@@ -2,6 +2,8 @@
 (function (root) {
   let library, map, layer, renderId = 0;
   const markers = new Map();
+  // Šumavská 524/31, Brno; verified against the OpenStreetMap address point.
+  const office = { id: "office", address: "Šumavská 31, Brno", latitude: 49.2098916, longitude: 16.5925845 };
   const leafletVersion = "https://unpkg.com/leaflet@1.9.4/dist/";
 
   function loadLeaflet() {
@@ -54,19 +56,22 @@
 
   async function render(restaurants, t) {
     const current = ++renderId;
-    const places = restaurants.filter(located);
+    const places = [
+      { ...office, name: t("mapOffice"), company: true },
+      ...restaurants.filter(located).map((r, index) => ({ ...r, number: index + 1 })),
+    ];
     const container = document.querySelector("#restaurant-map");
     const list = document.querySelector("#map-places");
     const status = document.querySelector("#map-status");
     const layout = document.querySelector(".map-layout");
     list.replaceChildren();
-    places.forEach((r, index) => {
+    places.forEach((r) => {
       const item = document.createElement("li");
       const link = document.createElement("a");
       link.href = directions(r);
       link.target = "_blank";
       link.rel = "noopener";
-      link.textContent = `${index + 1}. ${r.name}`;
+      link.textContent = r.company ? `★ ${r.name}` : `${r.number}. ${r.name}`;
       const address = document.createElement("small");
       address.textContent = r.address || "";
       link.append(address);
@@ -98,17 +103,24 @@
       }
       layer.clearLayers();
       markers.clear();
-      places.forEach((r, index) => {
-        const icon = Leaflet.divIcon({ className: "restaurant-pin", html: String(index + 1),
-          iconSize: [28, 28], iconAnchor: [14, 14] });
+      places.forEach((r) => {
+        const size = r.company ? 34 : 28;
+        const icon = Leaflet.divIcon({ className: `restaurant-pin${r.company ? " office-pin" : ""}`,
+          html: r.company ? "★" : String(r.number), iconSize: [size, size], iconAnchor: [size / 2, size / 2] });
         const label = document.createElement("span");
         label.textContent = r.name;
         const marker = Leaflet.marker([r.latitude, r.longitude], { icon, title: r.name, alt: r.name })
-          .bindTooltip(label).bindPopup(popup(r, t)).addTo(layer);
+          .bindTooltip(label, { permanent: Boolean(r.company), direction: "top" }).bindPopup(popup(r, t)).addTo(layer);
         markers.set(r.id, marker);
       });
       map.invalidateSize();
-      map.fitBounds(places.map((r) => [r.latitude, r.longitude]), { padding: [24, 24], maxZoom: 15 });
+      // Keep the office at the exact center while fitting every restaurant around it.
+      const latRadius = Math.max(0.0005, ...places.map((r) => Math.abs(r.latitude - office.latitude)));
+      const lonRadius = Math.max(0.0005, ...places.map((r) => Math.abs(r.longitude - office.longitude)));
+      const bounds = [[office.latitude - latRadius, office.longitude - lonRadius],
+        [office.latitude + latRadius, office.longitude + lonRadius]];
+      const zoom = Math.min(15, map.getBoundsZoom(bounds, false, [48, 48]));
+      map.setView([office.latitude, office.longitude], zoom);
       status.hidden = true;
     } catch {
       if (current !== renderId) return;
