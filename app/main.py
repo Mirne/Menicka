@@ -119,6 +119,12 @@ class VoteIn(BaseModel):
     other_note: str | None = Field(default=None, max_length=200)
 
 
+class OtherNoteIn(BaseModel):
+    name: str = Field(min_length=1, max_length=40)
+    other_note: str = Field(max_length=200)
+    day: str
+
+
 def restaurant_view(r: dict) -> dict:
     return {**r, "has_menu": has_menu(r), "skip": r["url"] == SKIP_URL, "other": r["url"] == OTHER_URL,
             "detected_kind": detect_kind(r["url"]) if r["kind"] == "auto" else r["kind"]}
@@ -185,6 +191,13 @@ def post_vote(body: VoteIn) -> dict:
     notes = ({i: body.other_note.strip() for i in ids if rs[i]["url"] == OTHER_URL}
              if body.other_note is not None else None)
     db.set_votes(today(), body.name.strip(), ids, notes)
+    return get_votes()
+
+
+@app.patch("/api/votes/other-note")
+def update_other_note(body: OtherNoteIn) -> dict:
+    if body.day == today():
+        db.update_vote_note(today(), body.name.strip(), OTHER_URL, body.other_note.strip())
     return get_votes()
 
 

@@ -246,3 +246,22 @@ def test_index_versions_all_assets_and_revalidates_html(client, tmp_path, monkey
     details = BeautifulSoup(second.text, "lxml").select_one("#other-details")
     assert details.has_attr("hidden")
     assert "row" not in details.get("class", [])  # cached .row CSS must not override hidden
+
+
+def test_other_autosave_only_edits_existing_current_day_choice(client):
+    rs = client.get("/api/restaurants").json()
+    other = next(r["id"] for r in rs if r["other"])
+    regular = rs[0]["id"]
+    result = client.post("/api/votes", json={"name": "Eva", "restaurant_ids": [other, regular]}).json()
+    payload = {"name": "Eva", "other_note": "  Sushi bar  ", "day": result["day"]}
+    response = client.patch("/api/votes/other-note", json=payload)
+    assert response.status_code == 200
+    votes = {v["restaurant_id"]: v for v in response.json()["votes"]}
+    assert votes[other]["note"] == "Sushi bar" and votes[regular]["note"] == ""
+    # Delayed autosave from yesterday or a removed choice must not recreate it.
+    client.patch("/api/votes/other-note", json={**payload, "day": "2000-01-01", "other_note": "Old"})
+    assert next(v for v in client.get("/api/votes").json()["votes"] if v["restaurant_id"] == other)["note"] == "Sushi bar"
+    client.post("/api/votes", json={"name": "Eva", "restaurant_ids": [regular]})
+    votes = client.patch("/api/votes/other-note", json=payload).json()["votes"]
+    assert [(v["restaurant_id"], v["note"]) for v in votes] == [(regular, "")]
+    assert client.patch("/api/votes/other-note", json={**payload, "other_note": "x" * 201}).status_code == 422

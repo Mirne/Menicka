@@ -147,6 +147,7 @@ async function loadAll() {
 
 // Click a restaurant to add it to your choices or take it back. "Nejdem na obed" excludes the rest.
 async function toggle(rid) {
+  await saveOtherNote();
   const name = $("#vote-name").value.trim();
   if (!name) { $("#vote-name").focus(); toast(t("enterName")); return; }
   const skipIds = new Set(state.restaurants.filter((r) => r.skip).map((r) => r.id));
@@ -164,29 +165,39 @@ async function toggle(rid) {
   toast(t(mine.size ? "saved" : "voteRemoved"));
 }
 
-async function saveOtherNote() {
-  if (!myOtherVote()) return;
-  const button = $("#other-save");
-  button.disabled = true;
+let otherSaveTimer;
+let otherSaveQueue = Promise.resolve();
+
+function saveOtherNote() {
+  clearTimeout(otherSaveTimer);
+  if (!state.noteDirty || !myOtherVote()) return otherSaveQueue;
   const name = $("#vote-name").value.trim();
   const note = $("#other-note").value.trim();
-  try {
-    const v = await api("/api/votes", { method: "POST", body: JSON.stringify({
-      name, restaurant_ids: [...myChoices()], other_note: note,
-    }) });
-    state.votes = v.votes;
-    if ($("#vote-name").value.trim() === name && $("#other-note").value.trim() === note) state.noteDirty = false;
-    renderChoices(); renderTally(); renderMenus();
-    toast(t("saved"));
-  } catch (err) { toast(err.message); }
-  finally { button.disabled = false; }
+  const day = state.day;
+  // Serialize writes so a slower request cannot overwrite a newer edit.
+  otherSaveQueue = otherSaveQueue.then(async () => {
+    try {
+      await api("/api/votes/other-note", { method: "PATCH", body: JSON.stringify({
+        name, other_note: note, day,
+      }) });
+      if (state.day === day && $("#vote-name").value.trim() === name && $("#other-note").value.trim() === note) {
+        state.noteDirty = false;
+      }
+      await loadVotes();
+    } catch (err) { toast(err.message); }
+  });
+  return otherSaveQueue;
 }
 
-$("#other-note").addEventListener("input", () => { state.noteDirty = true; });
+$("#other-note").addEventListener("input", () => {
+  state.noteDirty = true;
+  clearTimeout(otherSaveTimer);
+  otherSaveTimer = setTimeout(saveOtherNote, 500);
+});
+$("#other-note").addEventListener("blur", saveOtherNote);
 $("#other-note").addEventListener("keydown", (e) => {
   if (e.key === "Enter") { e.preventDefault(); saveOtherNote(); }
 });
-$("#other-save").addEventListener("click", saveOtherNote);
 
 $("#vote-form").addEventListener("submit", (e) => e.preventDefault());
 $("#vote-choices").addEventListener("click", (e) => {

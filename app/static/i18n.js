@@ -17,7 +17,7 @@
       going: (n) => (n === 1 ? "ide" : "idú"),
       skipName: "Nejdem na obed",
       otherName: "Inde",
-      otherDetails: "Kam konkrétne?", otherPh: "Názov reštaurácie alebo miesto", saveOther: "Uložiť",
+      otherDetails: "Kam konkrétne?", otherPh: "Názov reštaurácie alebo miesto",
     },
     cs: {
       refresh: "↻ Obnovit menu", refreshTitle: "Znovu stáhnout menu ze všech restaurací",
@@ -32,7 +32,7 @@
       going: (n) => (n === 1 ? "jde" : "jdou"),
       skipName: "Nejdu na oběd",
       otherName: "Jinde",
-      otherDetails: "Kam konkrétně?", otherPh: "Název restaurace nebo místo", saveOther: "Uložit",
+      otherDetails: "Kam konkrétně?", otherPh: "Název restaurace nebo místo",
     },
     en: {
       refresh: "↻ Refresh menus", refreshTitle: "Download the menus from all restaurants again",
@@ -47,7 +47,7 @@
       going: () => "going",
       skipName: "Not going to lunch",
       otherName: "Somewhere else",
-      otherDetails: "Where exactly?", otherPh: "Restaurant name or place", saveOther: "Save",
+      otherDetails: "Where exactly?", otherPh: "Restaurant name or place",
     },
   };
 
