@@ -49,7 +49,9 @@ function renderTally() {
   const byId = new Map(state.restaurants.map((r) => [r.id, r]));
   for (const v of state.votes) {
     const restaurant = byId.get(v.restaurant_id);
-    const place = restaurant?.other ? (v.note || "").trim() : "";
+    const editing = restaurant?.other && state.noteDirty
+      && v.name.toLowerCase() === $("#vote-name").value.trim().toLowerCase();
+    const place = restaurant?.other ? (editing ? $("#other-note").value : v.note || "").trim() : "";
     const key = JSON.stringify([v.restaurant_id, place.toLowerCase()]);
     if (!by.has(key)) by.set(key, { restaurant, place, votes: [] });
     by.get(key).votes.push(v);
@@ -165,11 +167,9 @@ async function toggle(rid) {
   toast(t(mine.size ? "saved" : "voteRemoved"));
 }
 
-let otherSaveTimer;
 let otherSaveQueue = Promise.resolve();
 
 function saveOtherNote() {
-  clearTimeout(otherSaveTimer);
   if (!state.noteDirty || !myOtherVote()) return otherSaveQueue;
   const name = $("#vote-name").value.trim();
   const note = $("#other-note").value.trim();
@@ -191,12 +191,8 @@ function saveOtherNote() {
 
 $("#other-note").addEventListener("input", () => {
   state.noteDirty = true;
-  clearTimeout(otherSaveTimer);
-  otherSaveTimer = setTimeout(saveOtherNote, 500);
-});
-$("#other-note").addEventListener("blur", saveOtherNote);
-$("#other-note").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") { e.preventDefault(); saveOtherNote(); }
+  renderTally();
+  return saveOtherNote();
 });
 
 $("#vote-form").addEventListener("submit", (e) => e.preventDefault());
