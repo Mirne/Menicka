@@ -221,3 +221,28 @@ def test_other_note_is_personal_and_removed_with_the_choice(client):
     client.post("/api/votes", json={"name": "Eva", "restaurant_ids": [other]})
     assert next(v for v in client.get("/api/votes").json()["votes"] if v["name"] == "Eva")["note"] == ""
     assert client.post("/api/votes", json={"name": "Eva", "restaurant_ids": [other], "other_note": "x" * 201}).status_code == 422
+
+
+
+def test_index_versions_all_assets_and_revalidates_html(client, tmp_path, monkeypatch):
+    import hashlib
+    import app.main as main
+    from bs4 import BeautifulSoup
+    first = client.get("/")
+    assert first.headers["cache-control"] == "no-cache"
+    assets = ("style.css", "i18n.js", "app.js")
+    version = hashlib.sha256(b"".join((main.STATIC / f).read_bytes() for f in assets)).hexdigest()[:16]
+    for filename in assets:
+        assert f"/static/{filename}?v={version}" in first.text
+        assert client.get(f"/static/{filename}?v={version}").status_code == 200
+    # A deployment changing one asset changes the URLs of the whole bundle.
+    for filename in (*assets, "index.html"):
+        (tmp_path / filename).write_bytes((main.STATIC / filename).read_bytes())
+    with (tmp_path / "i18n.js").open("a") as f:
+        f.write("\n// updated translations")
+    monkeypatch.setattr(main, "STATIC", tmp_path)
+    second = client.get("/")
+    assert f"?v={version}" not in second.text
+    details = BeautifulSoup(second.text, "lxml").select_one("#other-details")
+    assert details.has_attr("hidden")
+    assert "row" not in details.get("class", [])  # cached .row CSS must not override hidden
