@@ -72,9 +72,11 @@ GLUED_HEAD_RE = re.compile(
 
 def split_glued_headings(lines: list[str]) -> list[str]:
     out = []
+    # Some buffet menus put several bullet dishes in one HTML paragraph.
+    lines = [part for line in lines for part in re.split(r"\s+\*\s+(?=[^\W\d_])", line)]
     for line in lines:
         m = GLUED_HEAD_RE.match(line)
-        if m and day_heading(m.group(1), date.today()) is not None:
+        if m and not RANGE_RE.search(line) and day_heading(m.group(1), date.today()) is not None:
             out += [m.group(1), m.group(2)]
         else:
             out.append(line)
