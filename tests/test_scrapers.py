@@ -599,3 +599,29 @@ def test_nemilosrdni_bratri_follows_current_pdf_instead_of_opening_hours(pdf_url
         ("Hovězí guláš, houskový knedlík", 169),
         ("Zapečené těstoviny se sýrem", 149),
     ]
+
+
+def test_buffet_week_range_is_not_split_into_todays_empty_heading():
+    page = '''<main id="main"><h1>MENU 26. 10. – 30. 10. 2026</h1>
+    <p>BUFET All you can eat: 189,- CZK</p>
+    <h2>Pondělí / Monday 26. 10.:</h2><p>* Bean Soup</p>
+    <p>* Chicken Masala (kuřecí kousky v aromatické omáčce Masala, A: 7) * Chicken Madras (kuřecí kousky v kořeněné omáčce Madras, A: 7)</p>
+    <p>* VEG Dal Makhani</p><h2>Úterý / Tuesday 27. 10.:</h2><p>* Tomato Soup</p></main>
+    <aside>THALI MENU 1. 6. – 5. 6. 2026</aside>'''
+    r = run_fetch_bytes({"https://thali.example/": page}, "https://thali.example/#main", date(2026, 10, 26))
+    assert r.error is None, r.error
+    assert [i.name for s in r.sections for i in s.items] == [
+        "* Bean Soup", "* Chicken Masala (kuřecí kousky v aromatické omáčce Masala, A: 7)",
+        "Chicken Madras (kuřecí kousky v kořeněné omáčce Madras, A: 7)", "* VEG Dal Makhani"]
+
+
+def test_weekday_range_for_opening_hours_is_not_a_daily_menu_heading():
+    page = '''<main><h1>Polední menu</h1><p>Pondělí až pátek od 11:00 do 15:00</p>
+    <p>26/10 - 30/10</p><p>K menu karafa vody a polévka zdarma.</p>
+    <h2>PONDĚLÍ</h2><p>Polévka: Čočková (1,7,9)</p><p>Kuřecí prso 189 Kč</p>
+    <h2>ÚTERÝ</h2><p>Polévka: Boršč</p><p>Vepřová krkovice 189 Kč</p></main>'''
+    r = run_fetch_bytes({"https://garden.example/poledni-menu/": page},
+                        "https://garden.example/poledni-menu/", date(2026, 10, 26))
+    assert r.error is None, r.error
+    assert [(i.name, i.price) for s in r.sections for i in s.items] == [
+        ("Polévka: Čočková (1,7,9)", None), ("Kuřecí prso", 189)]

@@ -28,3 +28,26 @@ restaurants:
     also: ["pizz"]
   - name: Pho Eden
   - name: Lokofu
+  - name: Naber si
+    url: https://nabersi.cz/
+    selector: "#dnes-tab-pane"
+  - name: Sul Campo
+    url: https://www.sulcampobrno.cz/denni-menu/
+  - name: V Zatáčce
+    url: https://restaurace-v-zatacce.eatbu.com/?lang=cs
+  - name: Hubatá holka
+    url: https://hubataholka.cz/denni-menu/
+  - name: U Karla
+    url: https://ukarlabrno.cz/menu/pages/poledni-menu
+  - name: Nepal India Thali
+    url: https://www.indiathali.cz/#main
+  # Facebook-only source: https://www.facebook.com/zocesko/?locale=cs_CZ
+  - name: Zô
+  # No daily menu: https://www.facebook.com/p/FLEK_Brno-100089514188514/
+  - name: FLEK
+  # Regular fast-food offer, voting only: https://aktin.cz/prodejny/vilgain-fast-food-smetanova
+  - name: Vilgain Fast Food Smetanova
+  - name: Garden Food Concept
+    url: https://www.gardenfoodconcept.cz/poledni-menu/
+  - name: Flank
+    url: https://www.flank.cz/denni-menu/
