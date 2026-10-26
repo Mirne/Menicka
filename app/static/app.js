@@ -46,17 +46,20 @@ const fmtTime = (iso) => (iso ? new Date(iso).toLocaleTimeString(L.locale, { hou
 
 function renderTally() {
   const by = new Map();
-  for (const v of state.votes) {
-    if (!by.has(v.restaurant_id)) by.set(v.restaurant_id, []);
-    by.get(v.restaurant_id).push(v);
-  }
   const byId = new Map(state.restaurants.map((r) => [r.id, r]));
-  const skip = new Set(state.restaurants.filter((r) => r.skip).map((r) => r.id));
-  // most votes first, "Nejdem na obed" always last
-  const rows = [...by.entries()].sort((a, b) => skip.has(a[0]) - skip.has(b[0]) || b[1].length - a[1].length);
+  for (const v of state.votes) {
+    const restaurant = byId.get(v.restaurant_id);
+    const place = restaurant?.other ? (v.note || "").trim() : "";
+    const key = JSON.stringify([v.restaurant_id, place.toLowerCase()]);
+    if (!by.has(key)) by.set(key, { restaurant, place, votes: [] });
+    by.get(key).votes.push(v);
+  }
+  // Group each custom place separately; "Not going" always comes last.
+  const rows = [...by.values()].sort((a, b) => Boolean(a.restaurant?.skip) - Boolean(b.restaurant?.skip)
+    || b.votes.length - a.votes.length);
   $("#tally").innerHTML = rows.length
-    ? rows.map(([rid, vs]) => `<div class="t${skip.has(rid) ? " skip" : ""}"><strong>${esc(rname(byId.get(rid)))} · ${vs.length}</strong>
-        <div class="who">${vs.map((v) => esc(v.name) + (byId.get(rid)?.other && v.note ? ` (${esc(v.note)})` : "")).join(", ")}</div></div>`).join("")
+    ? rows.map(({ restaurant, place, votes }) => `<div class="t${restaurant?.skip ? " skip" : ""}"><strong>${esc(place || rname(restaurant))} · ${votes.length}</strong>
+        <div class="who">${votes.map((v) => esc(v.name)).join(", ")}</div></div>`).join("")
     : `<p class="muted">${esc(t("noVotes"))}</p>`;
 }
 

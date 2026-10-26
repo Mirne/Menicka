@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -11,7 +12,7 @@ from zoneinfo import ZoneInfo
 
 import yaml
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -197,5 +198,11 @@ app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 
 @app.get("/")
-def index() -> FileResponse:
-    return FileResponse(STATIC / "index.html")
+def index() -> HTMLResponse:
+    assets = ("style.css", "i18n.js", "app.js")
+    # One version for the whole bundle prevents mixing old translations/CSS with new JS.
+    version = hashlib.sha256(b"".join((STATIC / name).read_bytes() for name in assets)).hexdigest()[:16]
+    html = (STATIC / "index.html").read_text(encoding="utf-8")
+    for name in assets:
+        html = html.replace(f"/static/{name}", f"/static/{name}?v={version}")
+    return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
