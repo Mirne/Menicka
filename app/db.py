@@ -124,6 +124,15 @@ def set_votes(day: str, name: str, restaurant_ids: list[int], notes: dict[int, s
                           (notes[rid], day, key, rid))
 
 
+def update_vote_note(day: str, name: str, url: str, note: str) -> None:
+    """Edit an existing choice without recreating a removed vote or changing other choices."""
+    with connect() as c:
+        c.execute("UPDATE votes SET note = ?, updated_at = datetime('now') "
+                  "WHERE day = ? AND name_key = ? AND restaurant_id = "
+                  "(SELECT id FROM restaurants WHERE url = ?)",
+                  (note, day, name.casefold(), url))
+
+
 def set_vote(day: str, name: str, restaurant_id: int) -> None:
     """Add one choice, keeping the others."""
     key = name.casefold()
