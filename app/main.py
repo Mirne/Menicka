@@ -32,6 +32,7 @@ STATIC = Path(__file__).parent / "static"
 
 # restaurant id -> {"fetched_at": iso, "day": "YYYY-MM-DD", "result": dict}
 _cache: dict[int, dict] = {}
+_locations: dict[str, dict] = {}
 _lock = asyncio.Lock()
 
 
@@ -58,9 +59,11 @@ def seed_restaurants() -> None:
     else:
         log.info("no %s, only the built-in options", RESTAURANTS_FILE)
     rs = [r for r in rs if r.get("url") not in (OTHER_URL, SKIP_URL)] + [dict(b) for b in BUILT_IN]
+    _locations.clear()
     for r in rs:
         # A restaurant without url is only a voting option (no menu to fetch).
         r["url"] = r.get("url") or f"vote-only:{r['name']}"
+        _locations[r["url"]] = {key: r.get(key) for key in ("address", "latitude", "longitude")}
         db.upsert_restaurant(r["name"], r["url"], r.get("kind", "auto"), r.get("selector"),
                              r.get("daily_section"), ", ".join(parse_also(r.get("also"))))
     # restaurants.yaml is the list: whatever was removed from it goes away
@@ -126,7 +129,7 @@ class OtherNoteIn(BaseModel):
 
 
 def restaurant_view(r: dict) -> dict:
-    return {**r, "has_menu": has_menu(r), "skip": r["url"] == SKIP_URL, "other": r["url"] == OTHER_URL,
+    return {**r, **_locations.get(r["url"], {}), "has_menu": has_menu(r), "skip": r["url"] == SKIP_URL, "other": r["url"] == OTHER_URL,
             "detected_kind": detect_kind(r["url"]) if r["kind"] == "auto" else r["kind"]}
 
 
@@ -212,7 +215,7 @@ app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 @app.get("/")
 def index() -> HTMLResponse:
-    assets = ("style.css", "i18n.js", "app.js")
+    assets = ("style.css", "i18n.js", "map.js", "app.js")
     # One version for the whole bundle prevents mixing old translations/CSS with new JS.
     version = hashlib.sha256(b"".join((STATIC / name).read_bytes() for name in assets)).hexdigest()[:16]
     html = (STATIC / "index.html").read_text(encoding="utf-8")

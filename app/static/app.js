@@ -139,6 +139,7 @@ async function loadVotes() {
 async function loadAll() {
   const [restaurants, votes] = await Promise.all([api("/api/restaurants"), api("/api/votes")]);
   state.restaurants = restaurants;
+  globalThis.RestaurantMap?.render(restaurants, t);
   state.votes = votes.votes;
   state.day = votes.day;
   $("#today").textContent = new Date(votes.day).toLocaleDateString(L.locale, { weekday: "long", day: "numeric", month: "numeric" });

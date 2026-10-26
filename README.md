@@ -7,6 +7,8 @@ Stránka, ktorá zbiera denné menu z reštaurácií, ktoré zadáte, a ukazuje,
 - **Jazyk**: ovládanie stránky je po slovensky, česky alebo anglicky podľa jazyka prehliadača. Iný jazyk dostane angličtinu. Menu sa neprekladá. Jazyk sa dá vynútiť adresou, napríklad `?lang=cs`.
 - **Reštaurácie**: iba v súbore `restaurants.yaml`. Reštika bez `url`, napríklad Pho Eden, je len na výber v hlasovaní a nemá kartu s menu. Reštaurácia, ktorú zo súboru zmažeš, po reštarte zmizne aj zo stránky.
 
+- **Mapa**: dole nájdeš všetky podniky vrátane tých bez denného menu. Kliknutím na značku zobrazíš adresu a navigáciu. Polohy sa nastavujú v `restaurants.yaml` cez `address`, `latitude` a `longitude`. Mapa používa Leaflet a OpenStreetMap; keď sa nedá načítať, zostanú dostupné odkazy na navigáciu.
+
 ## Spustenie
 
 ```bash
