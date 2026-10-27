@@ -6,7 +6,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from datetime import date
-from urllib.parse import urldefrag
+from urllib.parse import urldefrag, urljoin
 
 import httpx
 
@@ -16,6 +16,7 @@ from .base import MenuResult, day_heading
 from .choiceqr import is_choiceqr, parse_choiceqr
 from .html_generic import NotFound, daily_document, parse_html, sections_from_lines
 from .pdf import lines_from_pdf
+from .padthai import is_padthai, parse_padthai
 
 log = logging.getLogger(__name__)
 
@@ -128,6 +129,9 @@ async def _parse(client: httpx.AsyncClient, url: str, kind: str, opts: Options,
         result.images = [url]
         return result
     html = r.text
+    if is_padthai(url):
+        data = await _get(client, urljoin(str(r.url), "/data.json"))
+        return parse_padthai(data.json(), url, opts.today)
     if kind == "choiceqr":
         result = only_daily(parse_choiceqr(html, url, opts.today, opts.daily_section))
         if result.error and not result.found_sections:  # page changed shape: try the visible text

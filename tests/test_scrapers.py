@@ -625,3 +625,31 @@ def test_weekday_range_for_opening_hours_is_not_a_daily_menu_heading():
     assert r.error is None, r.error
     assert [(i.name, i.price) for s in r.sections for i in s.items] == [
         ("Polévka: Čočková (1,7,9)", None), ("Kuřecí prso", 189)]
+
+
+def test_padthai_loads_live_json_and_todays_czech_dishes():
+    url = "https://padthairestaurace.cz/denni-menu"
+    data = {"weekTitle": "Týden 8.–12. 6. 2026", "days": {
+        "1": {"polevka": {"cs": {"name": "Monday soup"}}, "hlavniChody": []},
+        "2": {"polevka": {"cs": {"name": "TOM TOUD KAI", "desc": "slepičí vývar"}},
+              "hlavniChody": [{"cs": {"name": " PAD THAI KAI ", "desc": "rýžové nudle s kuřecím masem"},
+                               "en": {"name": "English"}, "price": 189}]}},
+        "weeklySpecials": [{"cs": {"name": "PAD MAMUANG"}, "price": 249}]}
+    r = run_fetch_bytes({url: '<html><main><h1>Denní nabídka</h1><div id="days"></div></main></html>',
+                         "https://padthairestaurace.cz/data.json": json.dumps(data)}, url, date(2026, 10, 27))
+    assert r.error is None, r.error
+    assert [(i.name, i.price, i.description) for s in r.sections for i in s.items] == [
+        ("TOM TOUD KAI", None, "slepičí vývar"),
+        ("PAD THAI KAI", 189, "rýžové nudle s kuřecím masem"), ("PAD MAMUANG", 249, "")]
+    assert all(s.is_daily for s in r.sections)
+
+
+def test_padthai_closed_day_and_weekend_do_not_show_weekly_specials():
+    from app.scrapers.padthai import parse_padthai, is_padthai
+    data = {"days": {"3": {"polevka": {"cs": {"name": "ZAVŘENO - SVÁTEK"}}, "hlavniChody": []}},
+            "weeklySpecials": [{"cs": {"name": "Special"}, "price": 249}]}
+    r = parse_padthai(data, "https://padthairestaurace.cz/denni-menu", date(2026, 10, 28))
+    assert [i.name for s in r.sections for i in s.items] == ["ZAVŘENO - SVÁTEK"]
+    assert parse_padthai(data, "url", date(2026, 10, 31)).error
+    assert parse_padthai({"days": {}}, "url", date(2026, 10, 27)).error
+    assert not is_padthai("https://padthairestaurace.cz.example.com/denni-menu")
