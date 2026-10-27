@@ -112,3 +112,8 @@ restaurants:
     latitude: 49.2116396
     longitude: 16.5973491
     url: https://www.flank.cz/denni-menu/
+  - name: Pad Thai
+    address: Palackého třída 124, Brno
+    latitude: 49.2271220
+    longitude: 16.5935962
+    url: https://padthairestaurace.cz/denni-menu
